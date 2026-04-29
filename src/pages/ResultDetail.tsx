@@ -33,9 +33,16 @@ export default function ResultDetail() {
 
         {/* Results */}
         <div className="space-y-3 mb-6">
-          {data.results?.map((result: any, i: number) => (
-            <ResultCard key={i} {...result} />
-          ))}
+          {data.results?.length > 0 ? (
+            data.results.map((result: any, i: number) => (
+              <ResultCard key={i} {...result} />
+            ))
+          ) : (
+            <div className="bg-white/85 border border-black/8 rounded-2xl p-8 text-center">
+              <p className="text-gray-500 text-sm font-medium">Results are being processed</p>
+              <p className="text-gray-400 text-xs mt-1">Your test results haven't been entered yet. Please check back soon.</p>
+            </div>
+          )}
         </div>
 
         {/* Disclaimer */}
