@@ -1,9 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { hash } from 'https://esm.sh/bcryptjs@2.4.3'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+async function sha256(text: string): Promise<string> {
+  const encoded = new TextEncoder().encode(text)
+  const buf = await crypto.subtle.digest('SHA-256', encoded)
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
 Deno.serve(async (req) => {
@@ -31,7 +36,7 @@ Deno.serve(async (req) => {
     })
   }
 
-  const key_hash = await hash(raw_key, 10)
+  const key_hash = await sha256(raw_key)
   const key_prefix = raw_key.slice(0, 8)
 
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)

@@ -107,6 +107,23 @@ export default function ApplicationDetail() {
 
   async function markComplete() {
     setCompleting(true)
+    // Save any pending results first before marking complete
+    const { data: { user } } = await supabase.auth.getUser()
+    const upserts = results
+      .filter(r => r.result_value && r.interpretation)
+      .map(r => ({
+        application_id: id,
+        test_type_id: r.test_type_id,
+        result_value: r.result_value,
+        unit: r.unit || null,
+        reference_range: r.reference_range || null,
+        interpretation: r.interpretation,
+        notes: r.notes || null,
+        entered_by: user?.id ?? null,
+      }))
+    if (upserts.length > 0) {
+      await supabase.from('test_results').upsert(upserts, { onConflict: 'application_id,test_type_id' })
+    }
     await supabase.from('applications').update({ status: 'complete' }).eq('id', id!)
     setApp((prev: any) => ({ ...prev, status: 'complete' }))
     setConfirmOpen(false)
@@ -212,7 +229,7 @@ export default function ApplicationDetail() {
             )}
 
             <div className="flex gap-3 mt-5 flex-wrap">
-              <Button variant="outline" loading={saving} onClick={saveResults} disabled={app.status === 'complete'}>
+              <Button variant="outline" loading={saving} onClick={saveResults}>
                 <Save size={16} /> Save Results
               </Button>
               {app.status !== 'complete' && (
