@@ -25,11 +25,11 @@ Deno.serve(async (req) => {
     const { data: app, error } = await supabase
       .from('applications')
       .select(`
-        id, tracking_number, full_name, status, created_at,
+        id, tracking_number, full_name, status, created_at, date_of_birth, gender,
         pickup_locations(name, city, state),
         test_results(
           result_value, unit, reference_range, interpretation, notes, updated_at,
-          test_types(name)
+          test_types(name, category)
         )
       `)
       .eq('tracking_number', tracking_number.trim().toUpperCase())
@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
     const location = app.pickup_locations as any
     const results = (app.test_results as any[]).map(r => ({
       test_name: r.test_types?.name ?? 'Unknown',
+      category: r.test_types?.category ?? 'Other',
       result_value: r.result_value,
       unit: r.unit,
       reference_range: r.reference_range,
@@ -67,6 +68,9 @@ Deno.serve(async (req) => {
       status: 'complete',
       tracking_number: app.tracking_number,
       patient_name: app.full_name,
+      date_of_birth: app.date_of_birth,
+      gender: app.gender,
+      collected_at: app.created_at,
       pickup_location: location ? `${location.name}, ${location.city}` : null,
       results,
     }), {
