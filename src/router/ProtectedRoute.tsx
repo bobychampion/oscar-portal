@@ -1,31 +1,24 @@
-import { useEffect, useState } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import Spinner from '../components/ui/Spinner'
 
-export default function ProtectedRoute() {
-  const [checking, setChecking] = useState(true)
-  const [authed, setAuthed] = useState(false)
+interface Props {
+  allowedRoles?: string[]
+}
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setAuthed(!!data.session)
-      setChecking(false)
-    })
+export default function ProtectedRoute({ allowedRoles }: Props) {
+  const { user, role, loading } = useAuth()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthed(!!session)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  if (checking) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-brand border-t-transparent rounded-full animate-spin" />
+        <Spinner />
       </div>
     )
   }
 
-  return authed ? <Outlet /> : <Navigate to="/admin/login" replace />
+  if (!user) return <Navigate to="/admin/login" replace />
+  if (allowedRoles && role && !allowedRoles.includes(role)) return <Navigate to="/unauthorized" replace />
+
+  return <Outlet />
 }

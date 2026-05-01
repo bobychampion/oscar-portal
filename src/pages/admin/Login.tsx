@@ -21,6 +21,7 @@ export default function Login() {
     if (authError) {
       setError('Invalid email or password.')
     } else {
+      // Role is loaded via AuthContext after session change — go to dashboard
       navigate('/admin/dashboard')
     }
   }
