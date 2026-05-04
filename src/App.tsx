@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import Apply from './pages/Apply'
 import Results from './pages/Results'
 import ResultDetail from './pages/ResultDetail'
+import OrderResults from './pages/OrderResults'
 import Unauthorized from './pages/Unauthorized'
 
 // Admin auth
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/apply" element={<Apply />} />
           <Route path="/results" element={<Results />} />
           <Route path="/results/:tracking_number" element={<ResultDetail />} />
+          <Route path="/order-results" element={<OrderResults />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           {/* Admin login */}

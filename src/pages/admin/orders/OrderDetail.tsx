@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, CheckCircle, Receipt } from 'lucide-react'
+import { ArrowLeft, Save, CheckCircle, Receipt, Share2, Mail, Link2, MessageCircle, ExternalLink } from 'lucide-react'
 import AdminLayout from '../../../components/admin/AdminLayout'
 import Badge from '../../../components/ui/Badge'
 import Button from '../../../components/ui/Button'
@@ -39,13 +39,15 @@ export default function OrderDetail() {
   const [completing, setCompleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [shareMsg, setShareMsg] = useState('')
 
   useEffect(() => {
     async function load() {
       const [{ data: o }, { data: inv }] = await Promise.all([
         supabase.from('orders').select(`
           *,
-          patients(full_name,patient_id,date_of_birth,gender,phone),
+          patients(full_name,patient_id,date_of_birth,gender,phone,email),
           order_tests(test_types(id,name)),
           order_results(test_type_id,result_value,unit,reference_range,interpretation,notes)
         `).eq('id', id!).single(),
@@ -104,6 +106,27 @@ export default function OrderDetail() {
   const canEdit = role === 'admin' || role === 'lab_scientist'
   const isPaid = order?.status !== 'pending_payment'
 
+  const resultsUrl = `${window.location.origin}/order-results?n=${encodeURIComponent(order?.order_number ?? '')}`
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(resultsUrl)
+    setShareMsg('Link copied!')
+    setTimeout(() => setShareMsg(''), 3000)
+  }
+
+  async function sendEmail() {
+    setSendingEmail(true)
+    setShareMsg('')
+    const { data, error } = await supabase.functions.invoke('send-order-results', { body: { order_id: id } })
+    setSendingEmail(false)
+    if (error || data?.error) {
+      setShareMsg(data?.error ?? 'Failed to send email.')
+    } else {
+      setShareMsg(`Email sent to ${data.to}`)
+    }
+    setTimeout(() => setShareMsg(''), 5000)
+  }
+
   if (loading) return <AdminLayout><div className="flex justify-center py-16"><Spinner /></div></AdminLayout>
 
   return (
@@ -160,6 +183,46 @@ export default function OrderDetail() {
             ))}
             {order.notes && <div><p className="text-gray-400 mb-1">Notes</p><p className="text-gray-700">{order.notes}</p></div>}
           </div>
+
+          {/* Share Results — only when complete */}
+          {order.status === 'complete' && (
+            <div className="bg-white/85 border border-black/8 rounded-2xl p-5 space-y-3">
+              <h3 className="font-semibold text-gray-900 font-heading flex items-center gap-2"><Share2 size={15} /> Share Results</h3>
+
+              <button onClick={() => window.open(resultsUrl, '_blank')}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-black/8 hover:bg-gray-50 transition-colors text-sm text-left">
+                <ExternalLink size={15} className="text-brand-2" />
+                <div><p className="font-medium text-gray-900">View Public Results</p><p className="text-xs text-gray-400">Open patient-facing results page</p></div>
+              </button>
+
+              <button onClick={copyLink}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-black/8 hover:bg-gray-50 transition-colors text-sm text-left">
+                <Link2 size={15} className="text-purple-500" />
+                <div><p className="font-medium text-gray-900">Copy Link</p><p className="text-xs text-gray-400 font-mono truncate">{resultsUrl}</p></div>
+              </button>
+
+              {order.patients?.email && (
+                <button onClick={sendEmail} disabled={sendingEmail}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-black/8 hover:bg-gray-50 transition-colors text-sm text-left disabled:opacity-60">
+                  <Mail size={15} className="text-teal-500" />
+                  <div><p className="font-medium text-gray-900">{sendingEmail ? 'Sending…' : 'Send via Email'}</p><p className="text-xs text-gray-400">{order.patients.email}</p></div>
+                </button>
+              )}
+
+              <a href={`https://wa.me/?text=${encodeURIComponent(`Your Oscar Diagnostics results are ready.\nOrder: ${order.order_number}\nView here: ${resultsUrl}`)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-black/8 hover:bg-gray-50 transition-colors text-sm">
+                <MessageCircle size={15} className="text-green-500" />
+                <div><p className="font-medium text-gray-900">Share via WhatsApp</p><p className="text-xs text-gray-400">Opens WhatsApp with pre-filled message</p></div>
+              </a>
+
+              {shareMsg && (
+                <p className={`text-xs px-3 py-2 rounded-lg ${shareMsg.includes('sent') || shareMsg.includes('copied') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                  {shareMsg}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Result Entry */}
