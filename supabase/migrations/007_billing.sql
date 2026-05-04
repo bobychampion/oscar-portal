@@ -1,8 +1,8 @@
 -- Phase 3: Billing & Payment
 
-CREATE SEQUENCE invoice_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS invoice_seq START 1;
 
-CREATE TABLE test_prices (
+CREATE TABLE IF NOT EXISTS test_prices (
   id            uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
   test_type_id  uuid          NOT NULL REFERENCES test_types(id),
   price_type    text          NOT NULL CHECK (price_type IN ('walk_in','referral','campaign','corporate','hmo')),
@@ -14,7 +14,7 @@ CREATE TABLE test_prices (
   UNIQUE(test_type_id, price_type)
 );
 
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
   id               uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_number   text          UNIQUE NOT NULL
                                  DEFAULT 'OSC-INV-' || to_char(now(),'YYYY') || '-'
@@ -36,10 +36,10 @@ CREATE TABLE invoices (
   CONSTRAINT invoice_has_source CHECK (order_id IS NOT NULL OR application_id IS NOT NULL)
 );
 
-CREATE INDEX idx_invoices_status ON invoices(payment_status);
-CREATE INDEX idx_invoices_order  ON invoices(order_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(payment_status);
+CREATE INDEX IF NOT EXISTS idx_invoices_order  ON invoices(order_id);
 
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
   id                   uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_id           uuid          NOT NULL REFERENCES invoices(id),
   amount               numeric(10,2) NOT NULL,
@@ -54,11 +54,15 @@ CREATE TABLE payments (
   created_at           timestamptz   NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_payments_invoice ON payments(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id);
 
 ALTER TABLE test_prices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoices    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments    ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Role access test_prices" ON test_prices;
+DROP POLICY IF EXISTS "Role access invoices"    ON invoices;
+DROP POLICY IF EXISTS "Role access payments"    ON payments;
 
 CREATE POLICY "Role access test_prices" ON test_prices FOR ALL
   USING (get_my_role() IN ('admin','finance','front_desk','lab_scientist','doctor'))
@@ -71,6 +75,9 @@ CREATE POLICY "Role access invoices" ON invoices FOR ALL
 CREATE POLICY "Role access payments" ON payments FOR ALL
   USING (get_my_role() IN ('admin','finance'))
   WITH CHECK (get_my_role() IN ('admin','finance','front_desk'));
+
+DROP TRIGGER IF EXISTS trg_invoices_updated_at    ON invoices;
+DROP TRIGGER IF EXISTS trg_test_prices_updated_at ON test_prices;
 
 CREATE TRIGGER trg_invoices_updated_at
   BEFORE UPDATE ON invoices FOR EACH ROW EXECUTE FUNCTION update_updated_at();

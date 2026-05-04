@@ -1,8 +1,8 @@
 -- Phase 2: Patient Records + Test Ordering
 
-CREATE SEQUENCE patient_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS patient_seq START 1;
 
-CREATE TABLE patients (
+CREATE TABLE IF NOT EXISTS patients (
   id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id        text        UNIQUE NOT NULL
                                 DEFAULT 'OSC-P-' || LPAD(nextval('patient_seq')::text, 5, '0'),
@@ -26,13 +26,13 @@ CREATE TABLE patients (
   updated_at        timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_patients_name  ON patients(full_name);
-CREATE INDEX idx_patients_phone ON patients(phone);
-CREATE INDEX idx_patients_pid   ON patients(patient_id);
+CREATE INDEX IF NOT EXISTS idx_patients_name  ON patients(full_name);
+CREATE INDEX IF NOT EXISTS idx_patients_phone ON patients(phone);
+CREATE INDEX IF NOT EXISTS idx_patients_pid   ON patients(patient_id);
 
-CREATE SEQUENCE order_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS order_seq START 1;
 
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
   id                   uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number         text        UNIQUE NOT NULL
                                    DEFAULT 'OSC-ORD-' || to_char(now(),'YYYY') || '-'
@@ -50,18 +50,18 @@ CREATE TABLE orders (
   updated_at           timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_orders_patient ON orders(patient_id);
-CREATE INDEX idx_orders_status  ON orders(status);
-CREATE INDEX idx_orders_created ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_patient ON orders(patient_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC);
 
-CREATE TABLE order_tests (
+CREATE TABLE IF NOT EXISTS order_tests (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id      uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   test_type_id  uuid NOT NULL REFERENCES test_types(id),
   UNIQUE(order_id, test_type_id)
 );
 
-CREATE TABLE order_results (
+CREATE TABLE IF NOT EXISTS order_results (
   id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id         uuid        NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   test_type_id     uuid        NOT NULL REFERENCES test_types(id),
@@ -77,13 +77,18 @@ CREATE TABLE order_results (
 );
 
 -- Link public applications to a patient record
-ALTER TABLE applications ADD COLUMN patient_id uuid REFERENCES patients(id);
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS patient_id uuid REFERENCES patients(id);
 
 -- RLS
 ALTER TABLE patients      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_tests   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_results ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Role access patients"      ON patients;
+DROP POLICY IF EXISTS "Role access orders"        ON orders;
+DROP POLICY IF EXISTS "Role access order_tests"   ON order_tests;
+DROP POLICY IF EXISTS "Role access order_results" ON order_results;
 
 CREATE POLICY "Role access patients" ON patients FOR ALL
   USING (get_my_role() IN ('admin','front_desk','lab_scientist','finance'))
@@ -100,6 +105,10 @@ CREATE POLICY "Role access order_tests" ON order_tests FOR ALL
 CREATE POLICY "Role access order_results" ON order_results FOR ALL
   USING (get_my_role() IN ('admin','lab_scientist','finance','doctor'))
   WITH CHECK (get_my_role() IN ('admin','lab_scientist'));
+
+DROP TRIGGER IF EXISTS trg_patients_updated_at      ON patients;
+DROP TRIGGER IF EXISTS trg_orders_updated_at        ON orders;
+DROP TRIGGER IF EXISTS trg_order_results_updated_at ON order_results;
 
 CREATE TRIGGER trg_patients_updated_at
   BEFORE UPDATE ON patients FOR EACH ROW EXECUTE FUNCTION update_updated_at();

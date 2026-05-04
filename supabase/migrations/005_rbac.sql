@@ -1,8 +1,11 @@
 -- Phase 1: RBAC — Role-Based Access Control
 
-CREATE TYPE user_role AS ENUM ('admin','finance','front_desk','lab_scientist','doctor');
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('admin','finance','front_desk','lab_scientist','doctor');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TABLE user_profiles (
+CREATE TABLE IF NOT EXISTS user_profiles (
   id          uuid        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   role        user_role   NOT NULL DEFAULT 'front_desk',
   full_name   text        NOT NULL,
@@ -20,6 +23,9 @@ $$;
 
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users read own profile"          ON user_profiles;
+DROP POLICY IF EXISTS "Admin full access user_profiles" ON user_profiles;
+
 CREATE POLICY "Users read own profile"
   ON user_profiles FOR SELECT
   USING (id = auth.uid());
@@ -36,6 +42,12 @@ DROP POLICY IF EXISTS "Admin full access test_results"       ON test_results;
 DROP POLICY IF EXISTS "Admin full access api_keys"           ON api_keys;
 DROP POLICY IF EXISTS "Admin full access webhook_endpoints"  ON webhook_endpoints;
 DROP POLICY IF EXISTS "Admin full access webhook_deliveries" ON webhook_deliveries;
+DROP POLICY IF EXISTS "Role access applications"             ON applications;
+DROP POLICY IF EXISTS "Role access application_tests"        ON application_tests;
+DROP POLICY IF EXISTS "Role access test_results"             ON test_results;
+DROP POLICY IF EXISTS "Admin only api_keys"                  ON api_keys;
+DROP POLICY IF EXISTS "Admin only webhook_endpoints"         ON webhook_endpoints;
+DROP POLICY IF EXISTS "Admin only webhook_deliveries"        ON webhook_deliveries;
 
 -- applications: front_desk + admin write; all roles read
 CREATE POLICY "Role access applications"
@@ -71,6 +83,7 @@ CREATE POLICY "Admin only webhook_deliveries"
   USING (get_my_role() = 'admin')
   WITH CHECK (get_my_role() = 'admin');
 
+DROP TRIGGER IF EXISTS trg_user_profiles_updated_at ON user_profiles;
 CREATE TRIGGER trg_user_profiles_updated_at
   BEFORE UPDATE ON user_profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
