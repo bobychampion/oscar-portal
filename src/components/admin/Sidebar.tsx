@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, Key, Webhook, LogOut,
-  Users, UserPlus, FlaskConical, ShoppingBag, Receipt,
+  Users, UserPlus, ShoppingBag, Receipt,
   BarChart3, BadgeDollarSign, Plus
 } from 'lucide-react'
 import { signOut } from '../../lib/auth'

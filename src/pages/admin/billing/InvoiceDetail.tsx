@@ -47,7 +47,6 @@ export default function InvoiceDetail() {
   async function recordPayment() {
     if (!form.amount) { setErr('Amount required.'); return }
     setRecording(true)
-    const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('payments').insert({
       invoice_id: id,
       amount: Number(form.amount),
