@@ -18,7 +18,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   async function fetchRole(uid: string) {
-    const { data } = await supabase.from('user_profiles').select('role').eq('id', uid).single()
+    const { data } = await supabase.from('user_profiles').select('role').eq('id', uid).maybeSingle()
     setRole((data?.role as UserRole) ?? null)
   }
 
