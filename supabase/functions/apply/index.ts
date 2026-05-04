@@ -45,6 +45,26 @@ Deno.serve(async (req) => {
         const junctions = test_type_ids.map((id: string) => ({ application_id: data.id, test_type_id: id }))
         await supabase.from('application_tests').insert(junctions)
 
+        // Auto-create or find a patient record and link it to the application
+        const { data: existingPatient } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('phone', phone)
+          .maybeSingle()
+
+        let patientId = existingPatient?.id ?? null
+        if (!patientId) {
+          const { data: newPatient } = await supabase
+            .from('patients')
+            .insert({ full_name, email, phone, date_of_birth, gender, city, state })
+            .select('id')
+            .single()
+          patientId = newPatient?.id ?? null
+        }
+        if (patientId) {
+          await supabase.from('applications').update({ patient_id: patientId }).eq('id', data.id)
+        }
+
         // Send confirmation email
         const resend = new Resend(Deno.env.get('RESEND_API_KEY')!)
         await resend.emails.send({

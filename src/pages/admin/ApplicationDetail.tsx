@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Save, CheckCircle, ShoppingBag } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
@@ -9,6 +9,7 @@ import Select from '../../components/ui/Select'
 import Modal from '../../components/ui/Modal'
 import Spinner from '../../components/ui/Spinner'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface ResultRow {
   test_type_id: string
@@ -29,6 +30,7 @@ const INTERP_OPTIONS = [
 export default function ApplicationDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { role } = useAuth()
   const [app, setApp] = useState<any>(null)
   const [results, setResults] = useState<ResultRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -146,7 +148,23 @@ export default function ApplicationDetail() {
           <h1 className="text-2xl font-bold text-gray-900 font-heading">{app.full_name}</h1>
           <p className="font-mono text-brand-2 text-sm font-semibold mt-0.5">{app.tracking_number}</p>
         </div>
-        <Badge variant={app.status} />
+        <div className="flex items-center gap-3">
+          <Badge variant={app.status} />
+          {(role === 'admin' || role === 'front_desk') && (
+            <Button
+              variant="outline"
+              onClick={() => navigate('/admin/orders/new', {
+                state: {
+                  patient_id: app.patient_id,
+                  patient_name: app.full_name,
+                  preSelectedTestIds: (app.application_tests ?? []).map((at: any) => at.test_types?.id).filter(Boolean),
+                }
+              })}
+            >
+              <ShoppingBag size={15} /> Create Order
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

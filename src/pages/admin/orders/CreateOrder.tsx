@@ -24,16 +24,18 @@ const PRIORITY_OPTIONS = [
 export default function CreateOrder() {
   const navigate = useNavigate()
   const location = useLocation()
-  const preselected = location.state as { patient_id?: string; patient_name?: string } | null
+  const preselected = location.state as { patient_id?: string; patient_name?: string; preSelectedTestIds?: string[] } | null
 
-  const [step, setStep] = useState(preselected?.patient_id ? 2 : 1)
+  const hasPatient = !!preselected?.patient_id
+  const hasTests = (preselected?.preSelectedTestIds?.length ?? 0) > 0
+  const [step, setStep] = useState(hasPatient && hasTests ? 3 : hasPatient ? 2 : 1)
   const [patientSearch, setPatientSearch] = useState('')
   const [patients, setPatients] = useState<any[]>([])
   const [selectedPatient, setSelectedPatient] = useState<any>(
-    preselected?.patient_id ? { id: preselected.patient_id, full_name: preselected.patient_name } : null
+    hasPatient ? { id: preselected!.patient_id, full_name: preselected!.patient_name } : null
   )
   const [testTypes, setTestTypes] = useState<any[]>([])
-  const [selectedTests, setSelectedTests] = useState<string[]>([])
+  const [selectedTests, setSelectedTests] = useState<string[]>(preselected?.preSelectedTestIds ?? [])
   const [orderType, setOrderType] = useState('walk_in')
   const [priority, setPriority] = useState('routine')
   const [notes, setNotes] = useState('')
