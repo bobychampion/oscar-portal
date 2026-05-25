@@ -12,7 +12,10 @@ import TestTypeSelector from './TestTypeSelector'
 import DnplToggle from './DnplToggle'
 import SuccessScreen from './SuccessScreen'
 
-const STEPS = ['Personal Info', 'Location', 'Tests', 'Financing', 'Review']
+const STEPS = ['Personal Info', 'Address', 'Next of Kin', 'Tests', 'Financing', 'Review']
+
+const BLOOD_OPTIONS = ['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(v => ({ value: v, label: v }))
+const GENOTYPE_OPTIONS = ['AA','AS','SS','AC','SC'].map(v => ({ value: v, label: v }))
 
 interface TestType { id: string; name: string; category: string; description?: string }
 interface PickupLocation { id: string; name: string; city: string; state: string }
@@ -42,6 +45,7 @@ export default function ApplicationForm() {
   const stepFields: (keyof ApplicationFormData)[][] = [
     ['full_name', 'email', 'phone', 'date_of_birth', 'gender'],
     ['city', 'state', 'pickup_location_id'],
+    [],
     ['test_type_ids'],
     ['wants_dnpl'],
     [],
@@ -110,12 +114,17 @@ export default function ApplicationForm() {
                   {...register('gender')}
                 />
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Select label="Blood Group" placeholder="Select…" options={BLOOD_OPTIONS} {...register('blood_group')} />
+                <Select label="Genotype" placeholder="Select…" options={GENOTYPE_OPTIONS} {...register('genotype')} />
+              </div>
             </div>
           )}
 
-          {/* Step 1: Location */}
+          {/* Step 1: Address */}
           {step === 1 && (
             <div className="space-y-4">
+              <Input label="Street Address" placeholder="12 Awolowo Road" {...register('address')} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="City *" placeholder="Lagos" error={errors.city?.message} {...register('city')} />
                 <Input label="State *" placeholder="Lagos" error={errors.state?.message} {...register('state')} />
@@ -130,8 +139,33 @@ export default function ApplicationForm() {
             </div>
           )}
 
-          {/* Step 2: Test Selection */}
+          {/* Step 2: Next of Kin & Medical */}
           {step === 2 && (
+            <div className="space-y-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Next of Kin</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input label="Name" placeholder="Chidi Okonkwo" {...register('next_of_kin_name')} />
+                <Input label="Phone" type="tel" placeholder="+234 802 345 6789" {...register('next_of_kin_phone')} />
+              </div>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 pt-2">Insurance / HMO</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input label="HMO Provider" placeholder="e.g. Hygeia HMO" {...register('hmo_provider')} />
+                <Input label="HMO Number" placeholder="e.g. HY-123456" {...register('hmo_number')} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Additional Notes</label>
+                <textarea
+                  rows={3}
+                  placeholder="Any relevant medical history or notes…"
+                  className="w-full text-sm rounded-xl border border-black/10 bg-white/85 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-brand-2/40 resize-none"
+                  {...register('notes')}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Test Selection */}
+          {step === 3 && (
             <TestTypeSelector
               testTypes={testTypes}
               selected={watchedTestIds}
@@ -140,16 +174,16 @@ export default function ApplicationForm() {
             />
           )}
 
-          {/* Step 3: DNPL */}
-          {step === 3 && (
+          {/* Step 4: DNPL */}
+          {step === 4 && (
             <div className="space-y-4">
               <p className="text-gray-500 text-sm mb-4">Would you like to use CareCova financing to pay for your tests later?</p>
               <DnplToggle value={watchedDnpl} onChange={v => setValue('wants_dnpl', v)} />
             </div>
           )}
 
-          {/* Step 4: Review */}
-          {step === 4 && (
+          {/* Step 5: Review */}
+          {step === 5 && (
             <div className="space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-2">
                 {[
@@ -158,16 +192,29 @@ export default function ApplicationForm() {
                   ['Phone', allValues.phone],
                   ['DOB', allValues.date_of_birth],
                   ['Gender', allValues.gender],
+                  ['Blood Group', allValues.blood_group],
+                  ['Genotype', allValues.genotype],
+                  ['Address', allValues.address],
                   ['City / State', `${allValues.city}, ${allValues.state}`],
-                  ['Pickup', selectedLocation ? `${selectedLocation.name}` : '—'],
+                  ['Pickup', selectedLocation ? selectedLocation.name : '—'],
+                  ['Next of Kin', allValues.next_of_kin_name],
+                  ['NOK Phone', allValues.next_of_kin_phone],
+                  ['HMO', allValues.hmo_provider],
+                  ['HMO No.', allValues.hmo_number],
                   ['DNPL', watchedDnpl ? 'Yes' : 'No'],
-                ].map(([label, value]) => (
+                ].filter(([, value]) => value).map(([label, value]) => (
                   <div key={label} className="bg-gray-50 rounded-xl px-4 py-3">
                     <p className="text-xs text-gray-400 font-semibold">{label}</p>
                     <p className="text-gray-900 font-medium">{value || '—'}</p>
                   </div>
                 ))}
               </div>
+              {allValues.notes && (
+                <div className="bg-gray-50 rounded-xl px-4 py-3">
+                  <p className="text-xs text-gray-400 font-semibold mb-1">Notes</p>
+                  <p className="text-gray-900">{allValues.notes}</p>
+                </div>
+              )}
               <div className="bg-gray-50 rounded-xl px-4 py-3">
                 <p className="text-xs text-gray-400 font-semibold mb-2">Tests Selected ({selectedTests.length})</p>
                 <div className="flex flex-wrap gap-1.5">

@@ -11,7 +11,14 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
-    const { full_name, email, phone, date_of_birth, gender, city, state, pickup_location_id, test_type_ids, wants_dnpl } = body
+    const {
+      full_name, email, phone, date_of_birth, gender,
+      blood_group, genotype, address,
+      city, state, pickup_location_id,
+      next_of_kin_name, next_of_kin_phone,
+      hmo_provider, hmo_number, notes,
+      test_type_ids, wants_dnpl,
+    } = body
 
     // Basic validation
     if (!full_name || !email || !phone || !date_of_birth || !gender || !city || !state || !pickup_location_id || !test_type_ids?.length) {
@@ -54,11 +61,23 @@ Deno.serve(async (req) => {
 
         let patientId = existingPatient?.id ?? null
         if (!patientId) {
-          const { data: newPatient } = await supabase
+          const { data: newPatient, error: patientErr } = await supabase
             .from('patients')
-            .insert({ full_name, email, phone, date_of_birth, gender, city, state })
+            .insert({
+              full_name, email, phone, date_of_birth, gender,
+              blood_group: blood_group || null,
+              genotype: genotype || null,
+              address: address || null,
+              city, state,
+              next_of_kin_name: next_of_kin_name || null,
+              next_of_kin_phone: next_of_kin_phone || null,
+              hmo_provider: hmo_provider || null,
+              hmo_number: hmo_number || null,
+              notes: notes || null,
+            })
             .select('id')
             .single()
+          if (patientErr) console.error('patient_create_failed', JSON.stringify(patientErr))
           patientId = newPatient?.id ?? null
         }
         if (patientId) {

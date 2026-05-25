@@ -4,14 +4,16 @@ interface StatCardProps {
   label: string
   value: number | string
   icon: LucideIcon
-  color?: 'teal' | 'blue' | 'amber' | 'green'
+  color?: 'teal' | 'blue' | 'amber' | 'green' | 'red' | 'purple'
 }
 
 const colors = {
-  teal: 'text-brand bg-brand/10',
-  blue: 'text-brand-2 bg-brand-2/10',
-  amber: 'text-amber-600 bg-amber-100',
-  green: 'text-green-600 bg-green-100',
+  teal:   'text-brand bg-brand/10',
+  blue:   'text-brand-2 bg-brand-2/10',
+  amber:  'text-amber-600 bg-amber-100',
+  green:  'text-green-600 bg-green-100',
+  red:    'text-red-600 bg-red-100',
+  purple: 'text-purple-600 bg-purple-100',
 }
 
 export default function StatCard({ label, value, icon: Icon, color = 'blue' }: StatCardProps) {
