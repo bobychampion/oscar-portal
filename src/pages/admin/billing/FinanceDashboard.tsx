@@ -50,9 +50,11 @@ export default function FinanceDashboard() {
   const [methodBreakdown, setMethodBreakdown] = useState<{ method: string; amount: number; pct: number }[]>([])
   const [payments, setPayments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
+      try {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       const sevenDaysAgo = new Date()
@@ -60,11 +62,11 @@ export default function FinanceDashboard() {
       sevenDaysAgo.setHours(0, 0, 0, 0)
 
       const [
-        { data: todayPays },
+        { data: todayPays, error: e1 },
         { data: allPaid },
         { data: unpaid },
         { data: pending },
-        { data: recentPays },
+        { data: recentPays, error: e5 },
         { data: weekPays },
         { data: overdueInv },
         { data: allInv },
@@ -86,6 +88,9 @@ export default function FinanceDashboard() {
           .lt('due_date', today.toISOString()),
         supabase.from('invoices').select('total,payment_status'),
       ])
+
+      if (e1) console.error('payments error:', e1)
+      if (e5) console.error('recent payments join error:', e5)
 
       // Totals
       const totalPaidAmt  = (allPaid  ?? []).reduce((s, i) => s + Number(i.total), 0)
@@ -148,12 +153,30 @@ export default function FinanceDashboard() {
 
       setPayments(recentPays ?? [])
       setLoading(false)
+      } catch (err) {
+        console.error('Finance dashboard load error:', err)
+        setError('Failed to load finance data. Please refresh the page.')
+        setLoading(false)
+      }
     }
     load()
   }, [])
 
   if (loading) {
     return <AdminLayout><div className="flex justify-center py-16"><Spinner /></div></AdminLayout>
+  }
+
+  if (error) {
+    return (
+      <AdminLayout>
+        <div className="flex flex-col items-center py-16 gap-3">
+          <p className="text-red-600 font-semibold">{error}</p>
+          <button onClick={() => window.location.reload()} className="text-sm text-brand-2 hover:underline">
+            Refresh
+          </button>
+        </div>
+      </AdminLayout>
+    )
   }
 
   return (

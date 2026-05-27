@@ -90,66 +90,89 @@ function MetricCard({
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const todayISO = today.toISOString()
+      try {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const todayISO = today.toISOString()
 
-      const [
-        patientsTotal, patientsToday, ordersTotal, urgentRes,
-        pendingPayment, paid, sampleCollected, processing, complete, cancelled,
-        todayPays, recentOrdersRes, staffRes, webhookRes,
-      ] = await Promise.all([
-        supabase.from('patients').select('*', { count: 'exact', head: true }),
-        supabase.from('patients').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
-        supabase.from('orders').select('*', { count: 'exact', head: true }),
-        supabase.from('orders').select('*', { count: 'exact', head: true })
-          .in('priority', ['urgent', 'stat'])
-          .neq('status', 'complete')
-          .neq('status', 'cancelled'),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending_payment'),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'paid'),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'sample_collected'),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'processing'),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'complete'),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'cancelled'),
-        supabase.from('payments').select('amount').gte('payment_date', todayISO),
-        supabase.from('orders')
-          .select('id,order_number,status,priority,order_type,created_at,patients(full_name)')
-          .order('created_at', { ascending: false })
-          .limit(8),
-        supabase.from('user_profiles').select('role').eq('is_active', true),
-        supabase.from('webhook_deliveries').select('*', { count: 'exact', head: true }).eq('status', 'failed'),
-      ])
+        const [
+          patientsTotal, patientsToday, ordersTotal, urgentRes,
+          pendingPayment, paid, sampleCollected, processing, complete, cancelled,
+          todayPays, recentOrdersRes, staffRes, webhookRes,
+        ] = await Promise.all([
+          supabase.from('patients').select('*', { count: 'exact', head: true }),
+          supabase.from('patients').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+          supabase.from('orders').select('*', { count: 'exact', head: true }),
+          supabase.from('orders').select('*', { count: 'exact', head: true })
+            .in('priority', ['urgent', 'stat'])
+            .neq('status', 'complete')
+            .neq('status', 'cancelled'),
+          supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending_payment'),
+          supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'paid'),
+          supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'sample_collected'),
+          supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'processing'),
+          supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'complete'),
+          supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'cancelled'),
+          supabase.from('payments').select('amount').gte('payment_date', todayISO),
+          supabase.from('orders')
+            .select('id,order_number,status,priority,order_type,created_at,patients!patient_id(full_name)')
+            .order('created_at', { ascending: false })
+            .limit(8),
+          supabase.from('user_profiles').select('role').eq('is_active', true),
+          supabase.from('webhook_deliveries').select('*', { count: 'exact', head: true }).eq('status', 'failed'),
+        ])
 
-      const staffByRole: Record<string, number> = {}
-      for (const s of staffRes.data ?? []) {
-        staffByRole[s.role] = (staffByRole[s.role] ?? 0) + 1
+        if (recentOrdersRes.error) console.error('orders join error:', recentOrdersRes.error)
+        if (patientsTotal.error) console.error('patients error:', patientsTotal.error)
+        if (staffRes.error) console.error('staff error:', staffRes.error)
+
+        const staffByRole: Record<string, number> = {}
+        for (const s of staffRes.data ?? []) {
+          staffByRole[s.role] = (staffByRole[s.role] ?? 0) + 1
+        }
+
+        setData({
+          totalPatients: patientsTotal.count ?? 0,
+          newPatientsToday: patientsToday.count ?? 0,
+          totalOrders: ordersTotal.count ?? 0,
+          urgentActive: urgentRes.count ?? 0,
+          todayRevenue: (todayPays.data ?? []).reduce((s, p) => s + Number(p.amount), 0),
+          pipeline: [
+            { ...STATUS_META.pending_payment,  count: pendingPayment.count ?? 0 },
+            { ...STATUS_META.paid,             count: paid.count ?? 0 },
+            { ...STATUS_META.sample_collected, count: sampleCollected.count ?? 0 },
+            { ...STATUS_META.processing,       count: processing.count ?? 0 },
+            { ...STATUS_META.complete,         count: complete.count ?? 0 },
+            { ...STATUS_META.cancelled,        count: cancelled.count ?? 0 },
+          ],
+          recentOrders: (recentOrdersRes.data ?? []) as unknown as RecentOrder[],
+          staffByRole,
+          webhookFailures: webhookRes.count ?? 0,
+        })
+      } catch (err) {
+        console.error('Dashboard load error:', err)
+        setError('Failed to load dashboard data. Please refresh the page.')
       }
-
-      setData({
-        totalPatients: patientsTotal.count ?? 0,
-        newPatientsToday: patientsToday.count ?? 0,
-        totalOrders: ordersTotal.count ?? 0,
-        urgentActive: urgentRes.count ?? 0,
-        todayRevenue: (todayPays.data ?? []).reduce((s, p) => s + Number(p.amount), 0),
-        pipeline: [
-          { ...STATUS_META.pending_payment,  count: pendingPayment.count ?? 0 },
-          { ...STATUS_META.paid,             count: paid.count ?? 0 },
-          { ...STATUS_META.sample_collected, count: sampleCollected.count ?? 0 },
-          { ...STATUS_META.processing,       count: processing.count ?? 0 },
-          { ...STATUS_META.complete,         count: complete.count ?? 0 },
-          { ...STATUS_META.cancelled,        count: cancelled.count ?? 0 },
-        ],
-        recentOrders: (recentOrdersRes.data ?? []) as unknown as RecentOrder[],
-        staffByRole,
-        webhookFailures: webhookRes.count ?? 0,
-      })
     }
     load()
   }, [])
+
+  if (error) {
+    return (
+      <AdminLayout>
+        <div className="flex flex-col items-center py-16 gap-3">
+          <p className="text-red-600 font-semibold">{error}</p>
+          <button onClick={() => window.location.reload()} className="text-sm text-brand-2 hover:underline">
+            Refresh
+          </button>
+        </div>
+      </AdminLayout>
+    )
+  }
 
   if (!data) {
     return <AdminLayout><div className="flex justify-center py-16"><Spinner /></div></AdminLayout>
