@@ -58,7 +58,7 @@ export default function PatientDetail() {
         </div>
         {(role === 'admin' || role === 'front_desk') && (
           <Button onClick={() => navigate('/admin/orders/new', { state: { patient_id: id, patient_name: patient.full_name } })}>
-            <Plus size={16} /> New Order
+            <Plus size={16} /> New Test
           </Button>
         )}
       </div>

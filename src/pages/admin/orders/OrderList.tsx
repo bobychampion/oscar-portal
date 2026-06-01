@@ -44,12 +44,12 @@ export default function OrderList() {
     <AdminLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 font-heading">Orders</h1>
-          <p className="text-gray-500 text-sm mt-0.5">All diagnostic test orders</p>
+          <h1 className="text-2xl font-bold text-gray-900 font-heading">Tests</h1>
+          <p className="text-gray-500 text-sm mt-0.5">All diagnostic test records</p>
         </div>
         {(role === 'admin' || role === 'front_desk') && (
           <Button onClick={() => navigate('/admin/orders/new')}>
-            <Plus size={16} /> New Order
+            <Plus size={16} /> New Test
           </Button>
         )}
       </div>
@@ -78,7 +78,7 @@ export default function OrderList() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-black/8 bg-gray-50/60">
-                <th className="text-left px-5 py-3 font-semibold text-gray-600">Order #</th>
+                <th className="text-left px-5 py-3 font-semibold text-gray-600">Test #</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Patient</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Tests</th>
                 <th className="text-left px-5 py-3 font-semibold text-gray-600">Type</th>
@@ -89,7 +89,7 @@ export default function OrderList() {
             </thead>
             <tbody>
               {orders.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400">No orders found</td></tr>
+                <tr><td colSpan={7} className="text-center py-12 text-gray-400">No tests found</td></tr>
               ) : orders.map(o => (
                 <tr
                   key={o.id}

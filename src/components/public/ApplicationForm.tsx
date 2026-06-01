@@ -17,7 +17,7 @@ const STEPS = ['Personal Info', 'Address', 'Next of Kin', 'Tests', 'Financing', 
 const BLOOD_OPTIONS = ['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(v => ({ value: v, label: v }))
 const GENOTYPE_OPTIONS = ['AA','AS','SS','AC','SC'].map(v => ({ value: v, label: v }))
 
-interface TestType { id: string; name: string; category: string; description?: string }
+interface TestType { id: string; name: string; category: string; description?: string; walk_in_price?: number | null }
 interface PickupLocation { id: string; name: string; city: string; state: string }
 
 export default function ApplicationForm() {

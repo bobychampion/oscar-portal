@@ -132,7 +132,7 @@ export default function OrderDetail() {
   return (
     <AdminLayout>
       <button onClick={() => navigate('/admin/orders')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-6 transition-colors">
-        <ArrowLeft size={16} /> Back to Orders
+        <ArrowLeft size={16} /> Back to Tests
       </button>
 
       <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
@@ -173,7 +173,7 @@ export default function OrderDetail() {
             ))}
           </div>
           <div className="bg-white/85 border border-black/8 rounded-2xl p-5 text-sm space-y-3">
-            <h3 className="font-semibold text-gray-900 font-heading">Order Info</h3>
+            <h3 className="font-semibold text-gray-900 font-heading">Test Info</h3>
             {[
               ['Type', order.order_type.replace('_', ' ')],
               ['Priority', order.priority],
@@ -272,7 +272,7 @@ export default function OrderDetail() {
       </div>
 
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Mark as Complete?">
-        <p className="text-gray-500 text-sm mb-5">This will finalize the order and trigger webhook notifications. This cannot be undone.</p>
+        <p className="text-gray-500 text-sm mb-5">This will finalize the test and trigger webhook notifications. This cannot be undone.</p>
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => setConfirmOpen(false)} className="flex-1">Cancel</Button>
           <Button loading={completing} onClick={markComplete} className="flex-1">Confirm</Button>

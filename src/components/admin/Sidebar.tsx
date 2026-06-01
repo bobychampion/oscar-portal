@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, Key, Webhook, LogOut,
   Users, UserPlus, ShoppingBag, Receipt,
-  BarChart3, BadgeDollarSign, Plus
+  BarChart3, BadgeDollarSign, Plus, FlaskConical
 } from 'lucide-react'
 import { signOut } from '../../lib/auth'
 import { useAuth } from '../../contexts/AuthContext'
@@ -20,11 +20,11 @@ const NAV: NavItem[] = [
   // All roles
   { to: '/admin/dashboard',    label: 'Dashboard',     icon: LayoutDashboard, roles: ['admin','finance','front_desk','lab_scientist','doctor'] },
 
-  // Patient & Orders — internal staff
+  // Patient & Tests — internal staff
   { to: '/admin/patients',     label: 'Patients',      icon: Users,           roles: ['admin','front_desk','lab_scientist'] },
   { to: '/admin/patients/new', label: 'Register Patient', icon: UserPlus,     roles: ['admin','front_desk'] },
-  { to: '/admin/orders',       label: 'Orders',        icon: ShoppingBag,     roles: ['admin','finance','front_desk','lab_scientist','doctor'] },
-  { to: '/admin/orders/new',   label: 'New Order',     icon: Plus,            roles: ['admin','front_desk'] },
+  { to: '/admin/orders',       label: 'Tests',         icon: ShoppingBag,     roles: ['admin','finance','front_desk','lab_scientist','doctor'] },
+  { to: '/admin/orders/new',   label: 'New Test',      icon: Plus,            roles: ['admin','front_desk'] },
 
   // Lab
   { to: '/admin/applications', label: 'Applications',  icon: ClipboardList,   roles: ['admin','finance','front_desk','lab_scientist'] },
@@ -35,6 +35,7 @@ const NAV: NavItem[] = [
   { to: '/admin/billing/pricing', label: 'Test Pricing', icon: BadgeDollarSign, roles: ['admin'] },
 
   // Admin only
+  { to: '/admin/test-types',   label: 'Test Types',    icon: FlaskConical,    roles: ['admin'] },
   { to: '/admin/users',        label: 'Users',         icon: Users,           roles: ['admin'] },
   { to: '/admin/api-keys',     label: 'API Keys',      icon: Key,             roles: ['admin'] },
   { to: '/admin/webhooks',     label: 'Webhooks',      icon: Webhook,         roles: ['admin'] },

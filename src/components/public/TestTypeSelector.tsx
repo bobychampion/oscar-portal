@@ -3,6 +3,7 @@ interface TestType {
   name: string
   category: string
   description?: string
+  walk_in_price?: number | null
 }
 
 interface TestTypeSelectorProps {
@@ -61,6 +62,9 @@ export default function TestTypeSelector({ testTypes, selected, onChange, error 
                   </div>
                   {test.description && (
                     <p className="text-gray-400 text-xs mt-0.5 leading-snug">{test.description}</p>
+                  )}
+                  {test.walk_in_price != null && (
+                    <p className="text-brand-2 text-xs font-semibold mt-1">₦{Number(test.walk_in_price).toLocaleString()}</p>
                   )}
                 </button>
               )

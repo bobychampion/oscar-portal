@@ -35,6 +35,7 @@ export default function CreateOrder() {
     hasPatient ? { id: preselected!.patient_id, full_name: preselected!.patient_name } : null
   )
   const [testTypes, setTestTypes] = useState<any[]>([])
+  const [allPrices, setAllPrices] = useState<Record<string, Record<string, number>>>({})
   const [selectedTests, setSelectedTests] = useState<string[]>(preselected?.preSelectedTestIds ?? [])
   const [orderType, setOrderType] = useState('walk_in')
   const [priority, setPriority] = useState('routine')
@@ -45,7 +46,18 @@ export default function CreateOrder() {
   const [searchLoading, setSearchLoading] = useState(false)
 
   useEffect(() => {
-    supabase.from('test_types').select('id,name,category').eq('is_active', true).order('category').then(({ data }) => setTestTypes(data ?? []))
+    Promise.all([
+      supabase.from('test_types').select('id,name,category').eq('is_active', true).order('category'),
+      supabase.from('test_prices').select('test_type_id,price_type,amount').eq('is_active', true),
+    ]).then(([{ data: types }, { data: prices }]) => {
+      setTestTypes(types ?? [])
+      const map: Record<string, Record<string, number>> = {}
+      for (const p of (prices ?? [])) {
+        if (!map[p.test_type_id]) map[p.test_type_id] = {}
+        map[p.test_type_id][p.price_type] = Number(p.amount)
+      }
+      setAllPrices(map)
+    })
   }, [])
 
   useEffect(() => {
@@ -70,6 +82,12 @@ export default function CreateOrder() {
     acc[t.category].push(t)
     return acc
   }, {})
+
+  const priceTypeForOrder = orderType === 'referral' ? 'referral' : orderType === 'corporate' ? 'corporate' : 'walk_in'
+
+  function getPrice(testId: string, type: string): number | null {
+    return allPrices[testId]?.[type] ?? null
+  }
 
   async function handleSubmit() {
     if (!selectedPatient || selectedTests.length === 0) { setError('Select a patient and at least one test.'); return }
@@ -121,13 +139,13 @@ export default function CreateOrder() {
   return (
     <AdminLayout>
       <button onClick={() => navigate('/admin/orders')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-6 transition-colors">
-        <ArrowLeft size={16} /> Back to Orders
+        <ArrowLeft size={16} /> Back to Tests
       </button>
-      <h1 className="text-2xl font-bold text-gray-900 font-heading mb-6">New Order</h1>
+      <h1 className="text-2xl font-bold text-gray-900 font-heading mb-6">New Test</h1>
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-8 text-sm">
-        {['Select Patient','Select Tests','Order Details','Review'].map((label, i) => (
+        {['Select Patient','Select Tests','Test Details','Review'].map((label, i) => (
           <div key={i} className="flex items-center gap-2">
             <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
               ${step > i + 1 ? 'bg-brand text-white' : step === i + 1 ? 'bg-brand-2 text-white' : 'bg-gray-200 text-gray-500'}`}>
@@ -181,13 +199,21 @@ export default function CreateOrder() {
               <div key={cat} className="mb-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">{cat}</p>
                 <div className="space-y-1">
-                  {tests.map((t: any) => (
-                    <label key={t.id} className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer">
-                      <input type="checkbox" checked={selectedTests.includes(t.id)} onChange={() => toggleTest(t.id)}
-                        className="rounded border-gray-300 text-brand accent-brand" />
-                      <span className="text-sm text-gray-800">{t.name}</span>
-                    </label>
-                  ))}
+                  {tests.map((t: any) => {
+                    const price = getPrice(t.id, 'walk_in')
+                    return (
+                      <label key={t.id} className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={selectedTests.includes(t.id)} onChange={() => toggleTest(t.id)}
+                          className="rounded border-gray-300 text-brand accent-brand" />
+                        <div>
+                          <p className="text-sm text-gray-800">{t.name}</p>
+                          {price != null && (
+                            <p className="text-xs text-brand-2 font-semibold">₦{price.toLocaleString()}</p>
+                          )}
+                        </div>
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
             ))}
@@ -198,11 +224,11 @@ export default function CreateOrder() {
           </div>
         )}
 
-        {/* Step 3: Order Details */}
+        {/* Step 3: Test Details */}
         {step === 3 && (
           <div className="bg-white/85 border border-black/8 rounded-2xl p-6 space-y-4">
-            <h2 className="font-semibold text-gray-900 font-heading mb-2">Order Details</h2>
-            <Select label="Order Type" value={orderType} onChange={e => setOrderType(e.target.value)} options={ORDER_TYPE_OPTIONS} />
+            <h2 className="font-semibold text-gray-900 font-heading mb-2">Test Details</h2>
+            <Select label="Test Type" value={orderType} onChange={e => setOrderType(e.target.value)} options={ORDER_TYPE_OPTIONS} />
             <Select label="Priority" value={priority} onChange={e => setPriority(e.target.value)} options={PRIORITY_OPTIONS} />
             {orderType === 'corporate' && (
               <Input label="Corporate Client Name" value={corporateClient} onChange={e => setCorporateClient(e.target.value)} />
@@ -222,21 +248,42 @@ export default function CreateOrder() {
         {/* Step 4: Review */}
         {step === 4 && (
           <div className="bg-white/85 border border-black/8 rounded-2xl p-6">
-            <h2 className="font-semibold text-gray-900 font-heading mb-4">Review Order</h2>
+            <h2 className="font-semibold text-gray-900 font-heading mb-4">Review Test</h2>
             <div className="space-y-3 text-sm mb-6">
               <div className="flex justify-between"><span className="text-gray-500">Patient</span><span className="font-semibold">{selectedPatient?.full_name}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Order Type</span><span className="capitalize">{orderType.replace('_', ' ')}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Test Type</span><span className="capitalize">{orderType.replace('_', ' ')}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Priority</span><span className="capitalize">{priority}</span></div>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1.5">
                 <span className="text-gray-500">Tests ({selectedTests.length})</span>
-                {selectedTests.map(tid => <span key={tid} className="text-gray-800 ml-2">· {testTypes.find(t => t.id === tid)?.name}</span>)}
+                {selectedTests.map(tid => {
+                  const tt = testTypes.find(t => t.id === tid)
+                  const price = getPrice(tid, priceTypeForOrder)
+                  return (
+                    <div key={tid} className="flex justify-between items-center ml-2">
+                      <span className="text-gray-800">· {tt?.name}</span>
+                      {price != null
+                        ? <span className="text-brand-2 font-semibold text-xs">₦{price.toLocaleString()}</span>
+                        : <span className="text-gray-400 text-xs">—</span>
+                      }
+                    </div>
+                  )
+                })}
+                {(() => {
+                  const total = selectedTests.reduce((s, tid) => s + (getPrice(tid, priceTypeForOrder) ?? 0), 0)
+                  return total > 0 ? (
+                    <div className="flex justify-between items-center mt-1 pt-2 border-t border-black/8 font-semibold">
+                      <span className="text-gray-700">Estimated Total</span>
+                      <span className="text-brand-2">₦{total.toLocaleString()}</span>
+                    </div>
+                  ) : null
+                })()}
               </div>
               {notes && <div className="flex flex-col gap-1"><span className="text-gray-500">Notes</span><span>{notes}</span></div>}
             </div>
             {error && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg mb-3">{error}</p>}
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(3)}>← Back</Button>
-              <Button loading={saving} onClick={handleSubmit}>Create Order</Button>
+              <Button loading={saving} onClick={handleSubmit}>Create Test</Button>
             </div>
           </div>
         )}
