@@ -4,10 +4,8 @@ import PublicLayout from '../components/public/PublicLayout'
 import ReportForm from '../components/results/ReportForm'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
-import { groupResultsByForm, FORM_META, type FormType } from '../lib/reportForms'
+import { groupResultsByLayout, layoutMeta, LAYOUT_ORDER, type ReportLayout } from '../lib/reportForms'
 import { supabase } from '../lib/supabase'
-
-const FORM_ORDER: FormType[] = ['chemistry', 'haematology', 'microbiology', 'other']
 
 export default function OrderResults() {
   const [searchParams] = useSearchParams()
@@ -31,14 +29,14 @@ export default function OrderResults() {
     setData(result)
   }
 
-  function printForm(formType: FormType) {
-    const section = document.getElementById(`report-${formType}`)
+  function printForm(layout: ReportLayout, title: string) {
+    const section = document.getElementById(`report-${layout}`)
     if (!section) return
     const win = window.open('', '_blank', 'width=900,height=700')
     if (!win) return
     win.document.write(`
       <!DOCTYPE html><html><head>
-      <title>Oscar Diagnostics – ${FORM_META[formType].title}</title>
+      <title>Oscar Diagnostics – ${title}</title>
       <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:system-ui,sans-serif;background:#fff;color:#111;}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact;}}</style>
       <link rel="stylesheet" href="${document.querySelector('link[rel=stylesheet]')?.getAttribute('href') ?? ''}">
       </head><body>${section.outerHTML}
@@ -63,8 +61,8 @@ export default function OrderResults() {
       )
     }
 
-    const grouped = groupResultsByForm(data.results ?? [])
-    const activeForms = FORM_ORDER.filter(f => grouped[f]?.length)
+    const grouped = groupResultsByLayout(data.results ?? [])
+    const activeLayouts = LAYOUT_ORDER.filter(l => grouped[l]?.length)
     const patient = {
       name: data.patient_name,
       tracking_number: data.order_number,
@@ -85,12 +83,15 @@ export default function OrderResults() {
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
             These results are for your reference. Please consult a licensed healthcare professional for medical advice.
           </div>
-          {activeForms.length > 0 ? (
-            activeForms.map(formType => (
-              <div key={formType} id={`report-${formType}`}>
-                <ReportForm formType={formType} results={grouped[formType]!} patient={patient} onPrint={() => printForm(formType)} />
-              </div>
-            ))
+          {activeLayouts.length > 0 ? (
+            activeLayouts.map(layout => {
+              const results = grouped[layout]!
+              return (
+                <div key={layout} id={`report-${layout}`}>
+                  <ReportForm layout={layout} results={results} patient={patient} onPrint={() => printForm(layout, layoutMeta(layout, results).title)} />
+                </div>
+              )
+            })
           ) : (
             <div className="bg-white/85 border border-black/8 rounded-2xl p-8 text-center">
               <p className="text-gray-500 text-sm">No results found for this order.</p>

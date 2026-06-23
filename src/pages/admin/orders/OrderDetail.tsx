@@ -1,31 +1,49 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, CheckCircle, Receipt, Share2, Mail, Link2, MessageCircle, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Save, CheckCircle, ShieldCheck, Receipt, Share2, Mail, Link2, MessageCircle, ExternalLink } from 'lucide-react'
 import AdminLayout from '../../../components/admin/AdminLayout'
 import Badge from '../../../components/ui/Badge'
 import Button from '../../../components/ui/Button'
-import Input from '../../../components/ui/Input'
-import Select from '../../../components/ui/Select'
 import Modal from '../../../components/ui/Modal'
 import Spinner from '../../../components/ui/Spinner'
+import ResultEntryForm, { type ResultEntryValue, type TestParameter } from '../../../components/results/ResultEntryForm'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 
-interface ResultRow {
+interface OrderTestEntry {
   test_type_id: string
   test_name: string
-  result_value: string
-  unit: string
-  reference_range: string
-  interpretation: 'normal' | 'abnormal' | 'critical' | ''
-  notes: string
+  result_mode: string
+  status: string
+  verified_by: string | null
+  value: ResultEntryValue
 }
 
-const INTERP_OPTIONS = [
-  { value: 'normal',   label: 'Normal' },
-  { value: 'abnormal', label: 'Abnormal' },
-  { value: 'critical', label: 'Critical' },
-]
+function isComplete(entry: OrderTestEntry, parameters: TestParameter[]): boolean {
+  const data = entry.value.result_data
+  switch (entry.result_mode) {
+    case 'numeric':
+    case 'panel': {
+      const rows = data.parameters ?? []
+      const expected = parameters.length > 0 ? parameters.length : 1
+      if (rows.length < expected) return false
+      return rows.every(r => r.value.trim() !== '')
+    }
+    case 'positive_negative':
+    case 'reactive':
+      return !!data.value
+    case 'observation':
+      return !!data.narrative?.trim()
+    case 'grid':
+      return (data.rows ?? []).length > 0 && (data.rows ?? []).every(r => r.result !== '')
+    case 'upload':
+      return !!entry.value.file_url
+    default:
+      return false
+  }
+}
+
+const VERIFIER_ROLES = ['admin', 'lab_scientist', 'pathologist']
 
 export default function OrderDetail() {
   const { id } = useParams()
@@ -33,7 +51,8 @@ export default function OrderDetail() {
   const { role } = useAuth()
   const [order, setOrder] = useState<any>(null)
   const [invoice, setInvoice] = useState<any>(null)
-  const [results, setResults] = useState<ResultRow[]>([])
+  const [entries, setEntries] = useState<OrderTestEntry[]>([])
+  const [parameters, setParameters] = useState<Record<string, TestParameter[]>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [completing, setCompleting] = useState(false)
@@ -48,50 +67,78 @@ export default function OrderDetail() {
         supabase.from('orders').select(`
           *,
           patients(full_name,patient_id,date_of_birth,gender,phone,email),
-          order_tests(test_types(id,name)),
-          order_results(test_type_id,result_value,unit,reference_range,interpretation,notes)
+          order_tests(test_types(id,name,result_mode)),
+          order_results(test_type_id,result_mode,result_data,file_url,status,verified_by,verified_at)
         `).eq('id', id!).single(),
         supabase.from('invoices').select('*').eq('order_id', id!).maybeSingle(),
       ])
       if (!o) { navigate('/admin/orders'); return }
       setOrder(o)
       setInvoice(inv)
-      const rows: ResultRow[] = (o.order_tests ?? []).map((at: any) => {
-        const existing = (o.order_results ?? []).find((r: any) => r.test_type_id === at.test_types?.id)
+
+      const testTypeIds = (o.order_tests ?? []).map((ot: any) => ot.test_types?.id).filter(Boolean)
+      const { data: params } = testTypeIds.length
+        ? await supabase.from('test_parameters').select('*').in('test_type_id', testTypeIds).eq('is_active', true).order('display_order')
+        : { data: [] as TestParameter[] }
+      const paramsByType: Record<string, TestParameter[]> = {}
+      for (const p of (params ?? [])) {
+        if (!paramsByType[p.test_type_id]) paramsByType[p.test_type_id] = []
+        paramsByType[p.test_type_id].push(p)
+      }
+      setParameters(paramsByType)
+
+      const built: OrderTestEntry[] = (o.order_tests ?? []).map((ot: any) => {
+        const tt = ot.test_types
+        const existing = (o.order_results ?? []).find((r: any) => r.test_type_id === tt?.id)
         return {
-          test_type_id: at.test_types?.id,
-          test_name: at.test_types?.name,
-          result_value: existing?.result_value ?? '',
-          unit: existing?.unit ?? '',
-          reference_range: existing?.reference_range ?? '',
-          interpretation: (existing?.interpretation ?? '') as any,
-          notes: existing?.notes ?? '',
+          test_type_id: tt?.id,
+          test_name: tt?.name,
+          result_mode: tt?.result_mode ?? 'numeric',
+          status: existing?.status ?? 'draft',
+          verified_by: existing?.verified_by ?? null,
+          value: {
+            result_mode: tt?.result_mode ?? 'numeric',
+            result_data: existing?.result_data ?? {},
+            file_url: existing?.file_url ?? null,
+          },
         }
       })
-      setResults(rows)
+      setEntries(built)
       setLoading(false)
     }
     load()
   }, [id, navigate])
 
-  function updateRow(idx: number, field: keyof ResultRow, value: string) {
-    setResults(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
+  function updateEntry(testTypeId: string, next: ResultEntryValue) {
+    setEntries(prev => prev.map(e => e.test_type_id === testTypeId ? { ...e, value: next } : e))
   }
 
   async function saveResults() {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const upserts = results.filter(r => r.result_value && r.interpretation).map(r => ({
-      order_id: id, test_type_id: r.test_type_id,
-      result_value: r.result_value, unit: r.unit || null,
-      reference_range: r.reference_range || null,
-      interpretation: r.interpretation, notes: r.notes || null,
-      entered_by: user?.id,
-    }))
-    const { error } = await supabase.from('order_results').upsert(upserts, { onConflict: 'order_id,test_type_id' })
+    const upserts = entries
+      .filter(e => isComplete(e, parameters[e.test_type_id] ?? []))
+      .map(e => ({
+        order_id: id, test_type_id: e.test_type_id,
+        result_mode: e.result_mode, result_data: e.value.result_data,
+        file_url: e.value.file_url, status: e.status === 'verified' ? 'verified' : 'submitted',
+        entered_by: user?.id,
+      }))
+    const { error } = upserts.length
+      ? await supabase.from('order_results').upsert(upserts, { onConflict: 'order_id,test_type_id' })
+      : { error: null }
     setSaving(false)
     setSaveMsg(error ? 'Error saving results.' : 'Results saved.')
+    if (!error) setEntries(prev => prev.map(e => isComplete(e, parameters[e.test_type_id] ?? []) && e.status === 'draft' ? { ...e, status: 'submitted' } : e))
     setTimeout(() => setSaveMsg(''), 3000)
+  }
+
+  async function verifyResult(testTypeId: string) {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('order_results').update({
+      status: 'verified', verified_by: user?.id, verified_at: new Date().toISOString(),
+    }).eq('order_id', id!).eq('test_type_id', testTypeId)
+    setEntries(prev => prev.map(e => e.test_type_id === testTypeId ? { ...e, status: 'verified' } : e))
   }
 
   async function markComplete() {
@@ -104,7 +151,9 @@ export default function OrderDetail() {
   }
 
   const canEdit = role === 'admin' || role === 'lab_scientist'
+  const canVerify = role && VERIFIER_ROLES.includes(role)
   const isPaid = order?.status !== 'pending_payment'
+  const allComplete = entries.length > 0 && entries.every(e => isComplete(e, parameters[e.test_type_id] ?? []))
 
   const resultsUrl = `${window.location.origin}/order-results?n=${encodeURIComponent(order?.order_number ?? '')}`
 
@@ -232,22 +281,35 @@ export default function OrderDetail() {
 
             {!isPaid && canEdit ? (
               <p className="text-gray-400 text-sm">Results locked until payment is confirmed.</p>
-            ) : results.length === 0 ? (
+            ) : entries.length === 0 ? (
               <p className="text-gray-400 text-sm">No tests on this order.</p>
             ) : (
               <div className="space-y-5">
-                {results.map((row, idx) => (
-                  <div key={row.test_type_id} className="border border-black/8 rounded-xl p-4">
-                    <p className="font-semibold text-gray-900 text-sm mb-3">{row.test_name}</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Input label="Result Value *" value={row.result_value} onChange={e => updateRow(idx, 'result_value', e.target.value)} disabled={!canEdit || order.status === 'complete'} />
-                      <Input label="Unit" value={row.unit} onChange={e => updateRow(idx, 'unit', e.target.value)} disabled={!canEdit} />
-                      <Input label="Reference Range" value={row.reference_range} onChange={e => updateRow(idx, 'reference_range', e.target.value)} disabled={!canEdit} />
-                      <Select label="Interpretation *" value={row.interpretation} onChange={e => updateRow(idx, 'interpretation', e.target.value)} options={INTERP_OPTIONS} placeholder="Select…" disabled={!canEdit} />
+                {entries.map(entry => (
+                  <div key={entry.test_type_id} className="border border-black/8 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-semibold text-gray-900 text-sm">{entry.test_name}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={entry.status === 'verified' ? 'success' : entry.status === 'submitted' ? 'pending' : 'cancelled'} label={entry.status} />
+                        {canVerify && entry.status === 'submitted' && order.status !== 'complete' && (
+                          <button onClick={() => verifyResult(entry.test_type_id)} className="flex items-center gap-1 text-xs text-brand-2 font-semibold">
+                            <ShieldCheck size={13} /> Verify
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-3">
-                      <Input label="Notes" value={row.notes} onChange={e => updateRow(idx, 'notes', e.target.value)} disabled={!canEdit} />
-                    </div>
+                    <ResultEntryForm
+                      orderId={id!}
+                      testTypeId={entry.test_type_id}
+                      testTypeName={entry.test_name}
+                      resultMode={entry.result_mode}
+                      parameters={parameters[entry.test_type_id] ?? []}
+                      patientGender={order.patients?.gender}
+                      patientDob={order.patients?.date_of_birth}
+                      value={entry.value}
+                      onChange={next => updateEntry(entry.test_type_id, next)}
+                      disabled={!canEdit || order.status === 'complete'}
+                    />
                   </div>
                 ))}
               </div>
@@ -261,7 +323,7 @@ export default function OrderDetail() {
                   <Save size={16} /> Save Results
                 </Button>
                 {order.status !== 'complete' && (
-                  <Button onClick={() => setConfirmOpen(true)} disabled={results.some(r => !r.result_value || !r.interpretation)}>
+                  <Button onClick={() => setConfirmOpen(true)} disabled={!allComplete}>
                     <CheckCircle size={16} /> Mark Complete
                   </Button>
                 )}

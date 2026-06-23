@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     .select(`
       order_number, status,
       patients(full_name, email, date_of_birth),
-      order_results(result_value, unit, reference_range, interpretation, test_types(name, category))
+      order_results(result_mode, result_data, status, test_types(name))
     `)
     .eq('id', order_id)
     .single()
@@ -44,17 +44,37 @@ Deno.serve(async (req) => {
 
   const resultsUrl = `${Deno.env.get('APP_URL') ?? 'https://app.oscardiagnostics.com'}/order-results?n=${encodeURIComponent(order.order_number)}`
 
-  const resultsRows = (order.order_results as any[]).map(r => `
+  // Flatten each result into one or more {label, value, reference_range, interpretation} email rows.
+  // Grid/upload modes are intentionally summarized — the full structured view lives on the results page.
+  const emailRows: { label: string; value: string; reference_range: string; interpretation: string }[] = []
+  for (const r of (order.order_results as any[])) {
+    if (r.status !== 'submitted' && r.status !== 'verified') continue
+    const data = r.result_data ?? {}
+    const testName = r.test_types?.name ?? ''
+    if (r.result_mode === 'numeric' || r.result_mode === 'panel') {
+      for (const p of (data.parameters ?? [])) {
+        emailRows.push({ label: p.label, value: `${p.value}${p.unit ? ' ' + p.unit : ''}`, reference_range: p.reference_range ?? '—', interpretation: p.interpretation ?? '' })
+      }
+    } else if (r.result_mode === 'positive_negative' || r.result_mode === 'reactive') {
+      emailRows.push({ label: testName, value: (data.value ?? '').replace('_', '-'), reference_range: '—', interpretation: '' })
+    } else if (r.result_mode === 'observation') {
+      emailRows.push({ label: testName, value: 'See full report', reference_range: '—', interpretation: '' })
+    } else {
+      emailRows.push({ label: testName, value: 'See full report', reference_range: '—', interpretation: '' })
+    }
+  }
+
+  const resultsRows = emailRows.map(r => `
     <tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-weight:600;color:#111;">${r.test_types?.name ?? ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#374151;">${r.result_value}${r.unit ? ' ' + r.unit : ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:12px;">${r.reference_range ?? '—'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-weight:600;color:#111;">${r.label}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#374151;">${r.value}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:12px;">${r.reference_range}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">
-        <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;
+        ${r.interpretation ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;
           background:${r.interpretation === 'normal' ? '#dcfce7' : r.interpretation === 'critical' ? '#fee2e2' : '#fef9c3'};
           color:${r.interpretation === 'normal' ? '#166534' : r.interpretation === 'critical' ? '#991b1b' : '#713f12'};">
           ${r.interpretation}
-        </span>
+        </span>` : ''}
       </td>
     </tr>
   `).join('')

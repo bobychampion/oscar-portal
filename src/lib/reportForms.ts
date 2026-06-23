@@ -1,59 +1,41 @@
-export type FormType = 'chemistry' | 'haematology' | 'microbiology' | 'other'
+export type ReportLayout = 'structured_table' | 'compact' | 'matrix' | 'narrative' | 'upload_viewer'
 
-export const CATEGORY_TO_FORM: Record<string, FormType> = {
-  Biochemistry:  'chemistry',
-  Endocrinology: 'chemistry',
-  Haematology:   'haematology',
-  Serology:      'haematology',
-  Parasitology:  'haematology',
-  Reproductive:  'haematology',
-  Microbiology:  'microbiology',
-  Virology:      'microbiology',
+export interface DynamicResult {
+  test_name: string
+  category_name: string
+  report_layout: ReportLayout
+  color: string
+  result_mode: string
+  result_data: any
+  file_url: string | null
+  status: string
+  reported_at?: string
 }
 
-export const FORM_META: Record<FormType, { title: string; subtitle: string; formNo: string; headerBg: string; headerText: string; accentBg: string }> = {
-  chemistry: {
-    title: 'CLINICAL CHEMISTRY REPORT',
-    subtitle: 'Biochemistry & Endocrinology',
-    formNo: 'OD/CC/001',
-    headerBg: '#1a2e4a',
-    headerText: '#ffffff',
-    accentBg: '#1a2e4a',
-  },
-  haematology: {
-    title: 'HAEMATOLOGY & SEROLOGY REPORT',
-    subtitle: 'Full Blood Count · Serology · Parasitology',
-    formNo: 'OD/HS/002',
-    headerBg: '#7b1d1d',
-    headerText: '#ffffff',
-    accentBg: '#7b1d1d',
-  },
-  microbiology: {
-    title: 'MICROBIOLOGY REPORT',
-    subtitle: 'Culture · Sensitivity · Microscopy',
-    formNo: 'OD/MB/003',
-    headerBg: '#14532d',
-    headerText: '#ffffff',
-    accentBg: '#14532d',
-  },
-  other: {
-    title: 'DIAGNOSTIC REPORT',
-    subtitle: 'Additional Tests',
-    formNo: 'OD/GEN/000',
-    headerBg: '#374151',
-    headerText: '#ffffff',
-    accentBg: '#374151',
-  },
+const LAYOUT_META: Record<ReportLayout, { title: string; formNo: string }> = {
+  structured_table: { title: 'DIAGNOSTIC TEST REPORT',          formNo: 'OD/ST/001' },
+  compact:          { title: 'SCREENING TEST REPORT',           formNo: 'OD/CP/002' },
+  matrix:           { title: 'CULTURE & SENSITIVITY REPORT',    formNo: 'OD/MX/003' },
+  narrative:        { title: 'NARRATIVE / OBSERVATION REPORT',  formNo: 'OD/NR/004' },
+  upload_viewer:    { title: 'IMAGING / ATTACHMENT REPORT',     formNo: 'OD/UP/005' },
 }
 
-export function groupResultsByForm(results: any[]) {
-  const groups: Partial<Record<FormType, any[]>> = {}
+export const LAYOUT_ORDER: ReportLayout[] = ['structured_table', 'compact', 'matrix', 'narrative', 'upload_viewer']
+
+export function groupResultsByLayout(results: DynamicResult[]): Partial<Record<ReportLayout, DynamicResult[]>> {
+  const groups: Partial<Record<ReportLayout, DynamicResult[]>> = {}
   for (const r of results) {
-    const form: FormType = CATEGORY_TO_FORM[r.category] ?? 'other'
-    if (!groups[form]) groups[form] = []
-    groups[form]!.push(r)
+    const layout = r.report_layout ?? 'structured_table'
+    if (!groups[layout]) groups[layout] = []
+    groups[layout]!.push(r)
   }
   return groups
+}
+
+export function layoutMeta(layout: ReportLayout, results: DynamicResult[]) {
+  const categories = [...new Set(results.map(r => r.category_name).filter(Boolean))]
+  const headerBg = results[0]?.color ?? '#374151'
+  return { ...LAYOUT_META[layout], subtitle: categories.join(' · ') || 'Diagnostic Results', headerBg }
 }
 
 export function interpretationColor(interp: string) {

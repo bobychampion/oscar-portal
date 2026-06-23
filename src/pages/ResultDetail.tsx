@@ -3,9 +3,38 @@ import { useEffect } from 'react'
 import PublicLayout from '../components/public/PublicLayout'
 import ReportForm from '../components/results/ReportForm'
 import Button from '../components/ui/Button'
-import { groupResultsByForm, FORM_META, type FormType } from '../lib/reportForms'
+import { groupResultsByLayout, layoutMeta, LAYOUT_ORDER, type DynamicResult, type ReportLayout } from '../lib/reportForms'
 
-const FORM_ORDER: FormType[] = ['chemistry', 'haematology', 'microbiology', 'other']
+// The legacy public Applications flow (test_results table, free-text category)
+// is out of scope for the dynamic test engine. This maps its flat shape onto
+// the same ReportForm contract the Orders flow uses, purely for rendering —
+// no schema or edge-function change.
+const LEGACY_CATEGORY_LAYOUT: Record<string, ReportLayout> = {
+  Biochemistry: 'structured_table', Endocrinology: 'structured_table',
+  Haematology: 'structured_table', Reproductive: 'compact',
+  Serology: 'compact', Parasitology: 'compact',
+  Microbiology: 'matrix', Virology: 'compact',
+}
+const LEGACY_CATEGORY_COLOR: Record<ReportLayout, string> = {
+  structured_table: '#1a2e4a', compact: '#7b1d1d', matrix: '#14532d', narrative: '#9333ea', upload_viewer: '#0ea5e9',
+}
+
+function adaptLegacyResults(results: any[]): DynamicResult[] {
+  return results.map(r => {
+    const layout = LEGACY_CATEGORY_LAYOUT[r.category] ?? 'structured_table'
+    return {
+      test_name: r.test_name,
+      category_name: r.category ?? 'Other',
+      report_layout: layout,
+      color: LEGACY_CATEGORY_COLOR[layout],
+      result_mode: 'numeric',
+      result_data: { parameters: [{ parameter_id: null, label: r.test_name, value: r.result_value, unit: r.unit, reference_range: r.reference_range, interpretation: r.interpretation }] },
+      file_url: null,
+      status: 'submitted',
+      reported_at: r.reported_at,
+    }
+  })
+}
 
 export default function ResultDetail() {
   const { tracking_number } = useParams()
@@ -19,8 +48,8 @@ export default function ResultDetail() {
 
   if (!data) return null
 
-  const grouped = groupResultsByForm(data.results ?? [])
-  const activeForms = FORM_ORDER.filter(f => grouped[f]?.length)
+  const grouped = groupResultsByLayout(adaptLegacyResults(data.results ?? []))
+  const activeLayouts = LAYOUT_ORDER.filter(l => grouped[l]?.length)
 
   const patient = {
     name: data.patient_name,
@@ -31,9 +60,9 @@ export default function ResultDetail() {
     collected_at: data.collected_at,
   }
 
-  function printForm(formType: FormType) {
-    const title = FORM_META[formType].title
-    const section = document.getElementById(`report-${formType}`)
+  function printForm(layout: ReportLayout) {
+    const title = layoutMeta(layout, grouped[layout] ?? []).title
+    const section = document.getElementById(`report-${layout}`)
     if (!section) return
     const win = window.open('', '_blank', 'width=900,height=700')
     if (!win) return
@@ -62,9 +91,9 @@ export default function ResultDetail() {
           <p className="text-xs font-bold uppercase tracking-widest text-brand mb-1">Diagnostic Results</p>
           <h1 className="text-2xl font-bold text-gray-900 font-heading">{data.patient_name}</h1>
           <p className="font-mono text-brand-2 text-sm font-semibold mt-0.5">{tracking_number}</p>
-          {activeForms.length > 1 && (
+          {activeLayouts.length > 1 && (
             <p className="text-gray-400 text-xs mt-2">
-              {activeForms.length} report forms below — each can be printed separately
+              {activeLayouts.length} report forms below — each can be printed separately
             </p>
           )}
         </div>
@@ -74,15 +103,15 @@ export default function ResultDetail() {
           These results are for your reference. Please consult a licensed healthcare professional for medical advice and diagnosis.
         </div>
 
-        {/* One card per form type */}
-        {activeForms.length > 0 ? (
-          activeForms.map(formType => (
-            <div key={formType} id={`report-${formType}`}>
+        {/* One card per report layout */}
+        {activeLayouts.length > 0 ? (
+          activeLayouts.map(layout => (
+            <div key={layout} id={`report-${layout}`}>
               <ReportForm
-                formType={formType}
-                results={grouped[formType]!}
+                layout={layout}
+                results={grouped[layout]!}
                 patient={patient}
-                onPrint={() => printForm(formType)}
+                onPrint={() => printForm(layout)}
               />
             </div>
           ))

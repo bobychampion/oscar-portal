@@ -47,10 +47,12 @@ export default function CreateOrder() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('test_types').select('id,name,category').eq('is_active', true).order('category'),
+      supabase.from('test_types').select('id,name,category_id,test_categories(name)').eq('is_active', true),
       supabase.from('test_prices').select('test_type_id,price_type,amount').eq('is_active', true),
     ]).then(([{ data: types }, { data: prices }]) => {
-      setTestTypes(types ?? [])
+      setTestTypes((types ?? [])
+        .map((t: any) => ({ ...t, category: t.test_categories?.name ?? 'Uncategorized' }))
+        .sort((a: any, b: any) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)))
       const map: Record<string, Record<string, number>> = {}
       for (const p of (prices ?? [])) {
         if (!map[p.test_type_id]) map[p.test_type_id] = {}
