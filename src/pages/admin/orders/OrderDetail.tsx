@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, CheckCircle, ShieldCheck, Receipt, Share2, Mail, Link2, MessageCircle, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Save, CheckCircle, ShieldCheck, Receipt, Share2, Mail, Link2, MessageCircle, ExternalLink, RotateCcw } from 'lucide-react'
 import AdminLayout from '../../../components/admin/AdminLayout'
 import Badge from '../../../components/ui/Badge'
 import Button from '../../../components/ui/Button'
@@ -57,6 +57,8 @@ export default function OrderDetail() {
   const [saving, setSaving] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [reopening, setReopening] = useState(false)
+  const [reopenConfirmOpen, setReopenConfirmOpen] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
   const [sendingEmail, setSendingEmail] = useState(false)
   const [shareMsg, setShareMsg] = useState('')
@@ -113,7 +115,7 @@ export default function OrderDetail() {
     setEntries(prev => prev.map(e => e.test_type_id === testTypeId ? { ...e, value: next } : e))
   }
 
-  async function saveResults() {
+  async function saveResults(): Promise<boolean> {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const upserts = entries
@@ -131,6 +133,7 @@ export default function OrderDetail() {
     setSaveMsg(error ? 'Error saving results.' : 'Results saved.')
     if (!error) setEntries(prev => prev.map(e => isComplete(e, parameters[e.test_type_id] ?? []) && e.status === 'draft' ? { ...e, status: 'submitted' } : e))
     setTimeout(() => setSaveMsg(''), 3000)
+    return !error
   }
 
   async function verifyResult(testTypeId: string) {
@@ -143,11 +146,22 @@ export default function OrderDetail() {
 
   async function markComplete() {
     setCompleting(true)
-    await saveResults()
+    const saved = await saveResults()
+    if (!saved) { setCompleting(false); return }
     await supabase.from('orders').update({ status: 'complete' }).eq('id', id!)
     setOrder((prev: any) => ({ ...prev, status: 'complete' }))
     setConfirmOpen(false)
     setCompleting(false)
+  }
+
+  async function reopenOrder() {
+    setReopening(true)
+    await supabase.from('order_results').update({ status: 'submitted', verified_by: null, verified_at: null }).eq('order_id', id!).eq('status', 'verified')
+    await supabase.from('orders').update({ status: 'paid' }).eq('id', id!)
+    setOrder((prev: any) => ({ ...prev, status: 'paid' }))
+    setEntries(prev => prev.map(e => e.status === 'verified' ? { ...e, status: 'submitted', verified_by: null } : e))
+    setReopenConfirmOpen(false)
+    setReopening(false)
   }
 
   const canEdit = role === 'admin' || role === 'lab_scientist'
@@ -191,6 +205,11 @@ export default function OrderDetail() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={order.status === 'complete' ? 'complete' : order.status === 'cancelled' ? 'cancelled' : order.status === 'paid' ? 'success' : 'pending'} label={order.status.replace(/_/g, ' ')} />
+          {order.status === 'complete' && role === 'admin' && (
+            <button onClick={() => setReopenConfirmOpen(true)} className="flex items-center gap-1.5 text-xs text-amber-700 border border-amber-300 rounded-lg px-2.5 py-1.5 hover:bg-amber-50 transition-colors">
+              <RotateCcw size={13} /> Reopen for Editing
+            </button>
+          )}
           {invoice && (
             <button onClick={() => navigate(`/admin/billing/${invoice.id}`)} className="flex items-center gap-1.5 text-xs text-brand-2 border border-brand-2/30 rounded-lg px-2.5 py-1.5 hover:bg-brand-2/5 transition-colors">
               <Receipt size={13} /> {invoice.invoice_number}
@@ -338,6 +357,14 @@ export default function OrderDetail() {
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => setConfirmOpen(false)} className="flex-1">Cancel</Button>
           <Button loading={completing} onClick={markComplete} className="flex-1">Confirm</Button>
+        </div>
+      </Modal>
+
+      <Modal open={reopenConfirmOpen} onClose={() => setReopenConfirmOpen(false)} title="Reopen for Editing?">
+        <p className="text-gray-500 text-sm mb-5">This will revert the test status to "Paid", unlock the result form, and reset any verified results to "submitted" so they can be re-verified. The patient's shared results link will stop showing results until it's marked complete again.</p>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setReopenConfirmOpen(false)} className="flex-1">Cancel</Button>
+          <Button loading={reopening} onClick={reopenOrder} className="flex-1">Confirm</Button>
         </div>
       </Modal>
     </AdminLayout>
