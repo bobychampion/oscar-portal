@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
         pickup_locations(name, city, state),
         test_results(
           result_value, unit, reference_range, interpretation, notes, updated_at,
-          test_types(name, category)
+          test_types(name, category, specimen_type)
         )
       `)
       .eq('tracking_number', tracking_number.trim().toUpperCase())
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     if (error || !app) {
       return new Response(JSON.stringify({ error: 'No matching record found. Check your tracking number and date of birth.' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
     const results = (app.test_results as any[]).map(r => ({
       test_name: r.test_types?.name ?? 'Unknown',
       category: r.test_types?.category ?? 'Other',
+      specimen_type: r.test_types?.specimen_type ?? null,
       result_value: r.result_value,
       unit: r.unit,
       reference_range: r.reference_range,

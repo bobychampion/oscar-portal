@@ -4,7 +4,6 @@ import PublicLayout from '../components/public/PublicLayout'
 import ReportForm from '../components/results/ReportForm'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
-import { groupResultsByLayout, layoutMeta, LAYOUT_ORDER, type ReportLayout } from '../lib/reportForms'
 import { supabase } from '../lib/supabase'
 
 export default function OrderResults() {
@@ -29,21 +28,8 @@ export default function OrderResults() {
     setData(result)
   }
 
-  function printForm(layout: ReportLayout, title: string) {
-    const section = document.getElementById(`report-${layout}`)
-    if (!section) return
-    const win = window.open('', '_blank', 'width=900,height=700')
-    if (!win) return
-    win.document.write(`
-      <!DOCTYPE html><html><head>
-      <title>Oscar Diagnostics – ${title}</title>
-      <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:system-ui,sans-serif;background:#fff;color:#111;}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact;}}</style>
-      <link rel="stylesheet" href="${document.querySelector('link[rel=stylesheet]')?.getAttribute('href') ?? ''}">
-      </head><body>${section.outerHTML}
-      <script>window.onload=()=>{window.print();window.close();}<\/script>
-      </body></html>
-    `)
-    win.document.close()
+  function printForm() {
+    window.print()
   }
 
   if (data) {
@@ -61,8 +47,7 @@ export default function OrderResults() {
       )
     }
 
-    const grouped = groupResultsByLayout(data.results ?? [])
-    const activeLayouts = LAYOUT_ORDER.filter(l => grouped[l]?.length)
+    const results = data.results ?? []
     const patient = {
       name: data.patient_name,
       tracking_number: data.order_number,
@@ -74,30 +59,25 @@ export default function OrderResults() {
 
     return (
       <PublicLayout>
-        <div className="max-w-2xl mx-auto space-y-6">
-          <div className="text-center mb-2">
+        <div className="max-w-2xl mx-auto space-y-6 print:max-w-none print:space-y-0">
+          <div className="text-center mb-2 print:hidden">
             <p className="text-xs font-bold uppercase tracking-widest text-brand mb-1">Diagnostic Results</p>
             <h1 className="text-2xl font-bold text-gray-900 font-heading">{data.patient_name}</h1>
             <p className="font-mono text-brand-2 text-sm font-semibold mt-0.5">{data.order_number}</p>
           </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 print:hidden">
             These results are for your reference. Please consult a licensed healthcare professional for medical advice.
           </div>
-          {activeLayouts.length > 0 ? (
-            activeLayouts.map(layout => {
-              const results = grouped[layout]!
-              return (
-                <div key={layout} id={`report-${layout}`}>
-                  <ReportForm layout={layout} results={results} patient={patient} onPrint={() => printForm(layout, layoutMeta(layout, results).title)} />
-                </div>
-              )
-            })
+          {results.length > 0 ? (
+            <div id="report-root">
+              <ReportForm results={results} patient={patient} onPrint={printForm} />
+            </div>
           ) : (
-            <div className="bg-white/85 border border-black/8 rounded-2xl p-8 text-center">
+            <div className="bg-white/85 border border-black/8 rounded-2xl p-8 text-center print:hidden">
               <p className="text-gray-500 text-sm">No results found for this order.</p>
             </div>
           )}
-          <div className="flex justify-center pb-6">
+          <div className="flex justify-center pb-6 print:hidden">
             <Button variant="ghost" onClick={() => setData(null)}>← Check another result</Button>
           </div>
         </div>

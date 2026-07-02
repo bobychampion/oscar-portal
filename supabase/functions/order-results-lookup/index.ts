@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
         patients(full_name, date_of_birth, gender, phone, email),
         order_results(
           result_mode, result_data, file_url, status, updated_at,
-          test_types(name, test_categories(name, report_layout, color))
+          test_types!test_type_id(name, specimen_type, test_categories!category_id(name, color))
         )
       `)
       .eq('order_number', order_number.trim().toUpperCase())
@@ -37,14 +37,14 @@ Deno.serve(async (req) => {
 
     if (!order) {
       return new Response(JSON.stringify({ error: 'No matching record found. Check your order number and date of birth.' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
     const patient = order.patients as any
     if (patient?.date_of_birth !== date_of_birth) {
       return new Response(JSON.stringify({ error: 'No matching record found. Check your order number and date of birth.' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
@@ -67,11 +67,13 @@ Deno.serve(async (req) => {
         const { data: signed } = await supabase.storage.from('lab-results').createSignedUrl(r.file_url, 60 * 60)
         fileUrl = signed?.signedUrl ?? null
       }
-      const category = r.test_types?.test_categories
+      // PostgREST may return the joined row as an object or (in some edge cases) a single-element array
+      const tt = Array.isArray(r.test_types) ? r.test_types[0] : r.test_types
+      const category = Array.isArray(tt?.test_categories) ? tt?.test_categories[0] : tt?.test_categories
       return {
-        test_name: r.test_types?.name ?? 'Unknown',
+        test_name: tt?.name ?? 'Unknown',
         category_name: category?.name ?? 'Other',
-        report_layout: category?.report_layout ?? 'structured_table',
+        specimen_type: tt?.specimen_type ?? null,
         color: category?.color ?? '#374151',
         result_mode: r.result_mode,
         result_data: r.result_data,

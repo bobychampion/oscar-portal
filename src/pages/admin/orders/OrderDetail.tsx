@@ -43,6 +43,28 @@ function isComplete(entry: OrderTestEntry, parameters: TestParameter[]): boolean
   }
 }
 
+// Looser check — has the scientist entered anything at all?
+// Used to decide whether to save (partial data saved as draft).
+function hasAnyData(entry: OrderTestEntry): boolean {
+  const data = entry.value.result_data ?? {}
+  switch (entry.result_mode) {
+    case 'numeric':
+    case 'panel':
+      return (data.parameters ?? []).some((r: any) => r.value?.trim() !== '')
+    case 'positive_negative':
+    case 'reactive':
+      return !!data.value
+    case 'observation':
+      return !!data.narrative?.trim()
+    case 'grid':
+      return (data.rows ?? []).length > 0
+    case 'upload':
+      return !!entry.value.file_url
+    default:
+      return false
+  }
+}
+
 const VERIFIER_ROLES = ['admin', 'lab_scientist', 'pathologist']
 
 export default function OrderDetail() {
@@ -119,19 +141,27 @@ export default function OrderDetail() {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const upserts = entries
-      .filter(e => isComplete(e, parameters[e.test_type_id] ?? []))
-      .map(e => ({
-        order_id: id, test_type_id: e.test_type_id,
-        result_mode: e.result_mode, result_data: e.value.result_data,
-        file_url: e.value.file_url, status: e.status === 'verified' ? 'verified' : 'submitted',
-        entered_by: user?.id,
-      }))
+      .filter(e => hasAnyData(e))
+      .map(e => {
+        const complete = isComplete(e, parameters[e.test_type_id] ?? [])
+        return {
+          order_id: id, test_type_id: e.test_type_id,
+          result_mode: e.result_mode, result_data: e.value.result_data,
+          file_url: e.value.file_url,
+          status: e.status === 'verified' ? 'verified' : complete ? 'submitted' : 'draft',
+          entered_by: user?.id,
+        }
+      })
     const { error } = upserts.length
       ? await supabase.from('order_results').upsert(upserts, { onConflict: 'order_id,test_type_id' })
       : { error: null }
     setSaving(false)
     setSaveMsg(error ? 'Error saving results.' : 'Results saved.')
-    if (!error) setEntries(prev => prev.map(e => isComplete(e, parameters[e.test_type_id] ?? []) && e.status === 'draft' ? { ...e, status: 'submitted' } : e))
+    if (!error) setEntries(prev => prev.map(e => {
+      if (!hasAnyData(e) || e.status === 'verified') return e
+      const complete = isComplete(e, parameters[e.test_type_id] ?? [])
+      return { ...e, status: complete ? 'submitted' : 'draft' }
+    }))
     setTimeout(() => setSaveMsg(''), 3000)
     return !error
   }

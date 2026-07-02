@@ -1,7 +1,7 @@
-import { interpretationColor, layoutMeta, type DynamicResult, type ReportLayout } from '../../lib/reportForms'
+import { interpretationColor, reportHeaderColor, REPORT_META, type DynamicResult } from '../../lib/reportForms'
+import oscarLogo from '../../assets/oscar-logo.png'
 
 interface ReportFormProps {
-  layout: ReportLayout
   results: DynamicResult[]
   patient: {
     name: string
@@ -25,46 +25,26 @@ function fmtDate(iso?: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-interface TableRow {
-  label: string
-  value: string
-  unit?: string | null
-  reference_range?: string | null
-  interpretation: string
+function fmtBinaryValue(value?: string) {
+  if (!value) return '—'
+  return value.replace('_', '-')
 }
 
-function flattenForTable(results: DynamicResult[]): TableRow[] {
-  const rows: TableRow[] = []
-  for (const r of results) {
-    const data = r.result_data ?? {}
-    if (r.result_mode === 'numeric' || r.result_mode === 'panel') {
-      for (const p of data.parameters ?? []) {
-        rows.push({ label: p.label, value: p.value, unit: p.unit, reference_range: p.reference_range, interpretation: p.interpretation })
-      }
-    } else if (r.result_mode === 'positive_negative' || r.result_mode === 'reactive') {
-      rows.push({ label: r.test_name, value: data.value === 'positive' || data.value === 'reactive' ? data.value.replace('_', '-') : (data.value ?? '').replace('_', '-'), interpretation: '' })
-    } else if (r.result_mode === 'observation') {
-      rows.push({ label: r.test_name, value: data.narrative ?? '', interpretation: '' })
-    }
-  }
-  return rows
-}
-
-export default function ReportForm({ layout, results, patient, onPrint }: ReportFormProps) {
-  const meta = layoutMeta(layout, results)
-  const tableRows = layout === 'structured_table' || layout === 'compact' ? flattenForTable(results) : []
+export default function ReportForm({ results, patient, onPrint }: ReportFormProps) {
+  const headerColor = reportHeaderColor(results)
+  const testNames = [...new Set(results.map(r => r.test_name).filter(Boolean))]
 
   return (
-    <div className="bg-white rounded-2xl border border-black/8 overflow-hidden print:shadow-none print:border-none">
+    <div className="bg-white rounded-2xl border border-black/8 overflow-hidden print:shadow-none print:border-none print:rounded-none">
       {/* Header */}
-      <div style={{ backgroundColor: meta.headerBg }} className="px-6 py-5 text-white">
-        <div className="flex items-start justify-between">
+      <div style={{ backgroundColor: headerColor }} className="px-6 py-5 text-white">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-0.5">Oscar Diagnostics</p>
-            <h2 className="text-base font-bold font-heading leading-tight">{meta.title}</h2>
-            <p className="text-white/60 text-xs mt-0.5">{meta.subtitle}</p>
+            <img src={oscarLogo} alt="Oscar Diagnostics" className="h-8 w-auto mb-2" />
+            <h2 className="text-base font-bold font-heading leading-tight">{REPORT_META.title}</h2>
+            <p className="text-white/60 text-xs mt-0.5">{testNames.join(' · ') || 'Diagnostic Results'}</p>
           </div>
-          <span className="text-white/40 text-[10px] font-mono">{meta.formNo}</span>
+          <span className="text-white/40 text-[10px] font-mono shrink-0">{REPORT_META.formNo}</span>
         </div>
       </div>
 
@@ -85,50 +65,80 @@ export default function ReportForm({ layout, results, patient, onPrint }: Report
         ))}
       </div>
 
-      {/* Body — rendering depends on report layout */}
-      <div className="px-6 py-4">
-        {(layout === 'structured_table' || layout === 'compact') && (
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr style={{ backgroundColor: meta.headerBg + '18' }}>
-                <th className="text-left px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide w-1/2">Test / Parameter</th>
-                <th className="text-center px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide w-1/6">Result</th>
-                <th className="text-left px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">Reference Range</th>
-                <th className="text-center px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide w-1/6">Flag</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tableRows.map((r, i) => (
-                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'}>
-                  <td className="px-3 py-2.5 font-medium text-gray-900">{r.label}</td>
-                  <td className="px-3 py-2.5 text-center font-bold text-gray-900 capitalize">
-                    {r.value}{r.unit ? <span className="font-normal text-gray-500 text-xs ml-1">{r.unit}</span> : null}
-                  </td>
-                  <td className="px-3 py-2.5 text-gray-500 text-xs">{r.reference_range ?? '—'}</td>
-                  <td className="px-3 py-2.5 text-center">
-                    {r.interpretation && (
-                      <span
-                        className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-                        style={{ color: interpretationColor(r.interpretation), backgroundColor: interpretationColor(r.interpretation) + '18' }}
-                      >
-                        {r.interpretation}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* Body — one section per test, formatted by its own result_mode */}
+      <div className="px-6 py-4 space-y-6">
+        {results.map((r, ri) => {
+          const data = r.result_data ?? {}
+          return (
+            <div key={ri} className={ri > 0 ? 'pt-6 border-t border-black/8' : ''}>
+              <div className="grid grid-cols-3 gap-3 mb-3 text-xs">
+                <div>
+                  <p className="text-gray-400 font-medium mb-0.5">Test Performed</p>
+                  <p className="text-gray-900 font-bold text-sm">{r.test_name}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-medium mb-0.5">Category</p>
+                  <p className="text-gray-900 font-semibold">{r.category_name}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-medium mb-0.5">Specimen</p>
+                  <p className="text-gray-900 font-semibold">{r.specimen_type ?? '—'}</p>
+                </div>
+              </div>
 
-        {layout === 'matrix' && (
-          <div className="space-y-5">
-            {results.map((r, ri) => (
-              <div key={ri}>
-                <p className="font-semibold text-gray-900 text-sm mb-2">{r.test_name}</p>
+              {(r.result_mode === 'numeric' || r.result_mode === 'panel') && (
                 <table className="w-full text-sm border-collapse">
                   <thead>
-                    <tr style={{ backgroundColor: meta.headerBg + '18' }}>
+                    <tr style={{ backgroundColor: headerColor + '18' }}>
+                      <th className="text-left px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide w-1/2">Parameter</th>
+                      <th className="text-center px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide w-1/6">Result</th>
+                      <th className="text-left px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">Reference Range</th>
+                      <th className="text-center px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide w-1/6">Flag</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.parameters ?? []).map((p: any, i: number) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'}>
+                        <td className="px-3 py-2.5 font-medium text-gray-900">{p.label}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-gray-900 capitalize">
+                          {p.value}{p.unit ? <span className="font-normal text-gray-500 text-xs ml-1">{p.unit}</span> : null}
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-500 text-xs">{p.reference_range ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-center">
+                          {p.interpretation && (
+                            <span
+                              className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                              style={{ color: interpretationColor(p.interpretation), backgroundColor: interpretationColor(p.interpretation) + '18' }}
+                            >
+                              {p.interpretation}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {(r.result_mode === 'positive_negative' || r.result_mode === 'reactive') && (
+                <div>
+                  <p className="text-gray-400 text-xs font-medium mb-1">Result</p>
+                  <p className="text-gray-900 font-bold text-base capitalize">{fmtBinaryValue(data.value)}</p>
+                  {data.notes && <p className="text-gray-500 text-xs mt-1.5">{data.notes}</p>}
+                </div>
+              )}
+
+              {r.result_mode === 'observation' && (
+                <div>
+                  <p className="text-gray-400 text-xs font-medium mb-1">Observation</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{data.narrative || '—'}</p>
+                </div>
+              )}
+
+              {r.result_mode === 'grid' && (
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr style={{ backgroundColor: headerColor + '18' }}>
                       <th className="text-left px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">Organism</th>
                       <th className="text-left px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">Drug</th>
                       <th className="text-center px-3 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">Result</th>
@@ -136,7 +146,7 @@ export default function ReportForm({ layout, results, patient, onPrint }: Report
                     </tr>
                   </thead>
                   <tbody>
-                    {(r.result_data?.rows ?? []).map((row: any, i: number) => (
+                    {(data.rows ?? []).map((row: any, i: number) => (
                       <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'}>
                         <td className="px-3 py-2 text-gray-900">{row.organism}</td>
                         <td className="px-3 py-2 text-gray-900">{row.drug}</td>
@@ -146,37 +156,21 @@ export default function ReportForm({ layout, results, patient, onPrint }: Report
                     ))}
                   </tbody>
                 </table>
-              </div>
-            ))}
-          </div>
-        )}
+              )}
 
-        {layout === 'narrative' && (
-          <div className="space-y-5">
-            {results.map((r, ri) => (
-              <div key={ri}>
-                <p className="font-semibold text-gray-900 text-sm mb-1.5">{r.test_name}</p>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{r.result_data?.narrative || '—'}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {layout === 'upload_viewer' && (
-          <div className="space-y-3">
-            {results.map((r, ri) => (
-              <div key={ri} className="border border-black/8 rounded-xl p-4">
-                <p className="font-semibold text-gray-900 text-sm mb-1.5">{r.test_name}</p>
-                {r.file_url ? (
-                  <a href={r.file_url} target="_blank" rel="noopener noreferrer" className="text-sm text-brand-2 underline">View Attachment</a>
-                ) : (
-                  <p className="text-sm text-gray-400">No file attached.</p>
-                )}
-                {r.result_data?.caption && <p className="text-xs text-gray-500 mt-1.5">{r.result_data.caption}</p>}
-              </div>
-            ))}
-          </div>
-        )}
+              {r.result_mode === 'upload' && (
+                <div className="border border-black/8 rounded-xl p-4">
+                  {r.file_url ? (
+                    <a href={r.file_url} target="_blank" rel="noopener noreferrer" className="text-sm text-brand-2 underline">View Attachment</a>
+                  ) : (
+                    <p className="text-sm text-gray-400">No file attached.</p>
+                  )}
+                  {data.caption && <p className="text-xs text-gray-500 mt-1.5">{data.caption}</p>}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Footer */}
@@ -194,7 +188,7 @@ export default function ReportForm({ layout, results, patient, onPrint }: Report
           </div>
         </div>
         <p className="text-center text-[10px] text-gray-400">
-          OSCAR DIAGNOSTICS | {meta.formNo} | Confidential – For Medical Use Only
+          OSCAR DIAGNOSTICS | {REPORT_META.formNo} | Confidential – For Medical Use Only
         </p>
       </div>
 
@@ -203,7 +197,7 @@ export default function ReportForm({ layout, results, patient, onPrint }: Report
         <button
           onClick={onPrint}
           className="flex items-center gap-2 text-sm font-semibold px-5 py-2 rounded-xl border-2 transition-colors"
-          style={{ borderColor: meta.headerBg, color: meta.headerBg }}
+          style={{ borderColor: headerColor, color: headerColor }}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>

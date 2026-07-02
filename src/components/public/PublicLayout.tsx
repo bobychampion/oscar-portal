@@ -4,7 +4,7 @@ import { Link, NavLink } from 'react-router-dom'
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 bg-white/80 border-b border-black/8 backdrop-blur-md">
+      <header className="sticky top-0 z-40 bg-white/80 border-b border-black/8 backdrop-blur-md print:hidden">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-brand font-bold font-heading text-lg tracking-tight">
             Oscar Labs
