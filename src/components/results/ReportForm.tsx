@@ -1,6 +1,11 @@
 import { interpretationColor, reportHeaderColor, REPORT_META, type DynamicResult } from '../../lib/reportForms'
 import oscarLogo from '../../assets/oscar-logo.png'
 
+interface StaffSignature {
+  name: string
+  signature_url?: string | null
+}
+
 interface ReportFormProps {
   results: DynamicResult[]
   patient: {
@@ -11,6 +16,8 @@ interface ReportFormProps {
     pickup_location?: string
     collected_at?: string
   }
+  reportedBy?: StaffSignature | null
+  reviewedBy?: StaffSignature | null
   onPrint: () => void
 }
 
@@ -30,7 +37,7 @@ function fmtBinaryValue(value?: string) {
   return value.replace('_', '-')
 }
 
-export default function ReportForm({ results, patient, onPrint }: ReportFormProps) {
+export default function ReportForm({ results, patient, reportedBy, reviewedBy, onPrint }: ReportFormProps) {
   const headerColor = reportHeaderColor(results)
   const testNames = [...new Set(results.map(r => r.test_name).filter(Boolean))]
 
@@ -176,16 +183,20 @@ export default function ReportForm({ results, patient, onPrint }: ReportFormProp
       {/* Footer */}
       <div className="border-t border-black/8 px-6 py-4">
         <div className="grid grid-cols-2 gap-6 text-xs text-gray-500 mb-4">
-          <div>
-            <p className="font-semibold text-gray-700 mb-1">Reported By</p>
-            <p className="border-b border-gray-300 pb-0.5 h-5" />
-            <p className="mt-1">Signature: <span className="border-b border-gray-300 inline-block w-32" /></p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-700 mb-1">Reviewed By</p>
-            <p className="border-b border-gray-300 pb-0.5 h-5" />
-            <p className="mt-1">Signature: <span className="border-b border-gray-300 inline-block w-32" /></p>
-          </div>
+          {[
+            { label: 'Reported By', staff: reportedBy },
+            { label: 'Reviewed By', staff: reviewedBy },
+          ].map(({ label, staff }) => (
+            <div key={label}>
+              <p className="font-semibold text-gray-700 mb-1">{label}</p>
+              {staff?.signature_url ? (
+                <img src={staff.signature_url} alt={`${label} signature`} className="h-10 max-w-[160px] object-contain mb-0.5" />
+              ) : (
+                <p className="border-b border-gray-300 pb-0.5 h-8" />
+              )}
+              <p className="mt-1 font-medium text-gray-700">{staff?.name ?? '—'}</p>
+            </div>
+          ))}
         </div>
         <p className="text-center text-[10px] text-gray-400">
           OSCAR DIAGNOSTICS | {REPORT_META.formNo} | Confidential – For Medical Use Only

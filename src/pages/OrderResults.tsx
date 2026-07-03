@@ -11,17 +11,17 @@ export default function OrderResults() {
   const prefilledNumber = searchParams.get('n') ?? ''
 
   const [orderNumber, setOrderNumber] = useState(prefilledNumber)
-  const [dob, setDob] = useState('')
+  const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [data, setData] = useState<any>(null)
 
   async function lookup() {
-    if (!orderNumber.trim() || !dob) { setError('Both fields are required.'); return }
+    if (!orderNumber.trim() || !phone.trim()) { setError('Both fields are required.'); return }
     setLoading(true)
     setError('')
     const { data: result, error: fnErr } = await supabase.functions.invoke('order-results-lookup', {
-      body: { order_number: orderNumber.trim().toUpperCase(), date_of_birth: dob }
+      body: { order_number: orderNumber.trim().toUpperCase(), phone: phone.trim() }
     })
     setLoading(false)
     if (fnErr || result?.error) { setError(result?.error ?? 'Something went wrong. Please try again.'); return }
@@ -70,7 +70,13 @@ export default function OrderResults() {
           </div>
           {results.length > 0 ? (
             <div id="report-root">
-              <ReportForm results={results} patient={patient} onPrint={printForm} />
+              <ReportForm
+                results={results}
+                patient={patient}
+                reportedBy={data.reported_by ?? null}
+                reviewedBy={data.reviewed_by ?? null}
+                onPrint={printForm}
+              />
             </div>
           ) : (
             <div className="bg-white/85 border border-black/8 rounded-2xl p-8 text-center print:hidden">
@@ -91,7 +97,7 @@ export default function OrderResults() {
         <div className="text-center mb-8">
           <p className="text-xs font-bold uppercase tracking-widest text-brand mb-2">View Results</p>
           <h1 className="text-3xl font-bold text-gray-900 font-heading mb-3">Check Your Results</h1>
-          <p className="text-gray-500 text-sm">Enter your order number and date of birth to view your diagnostic results.</p>
+          <p className="text-gray-500 text-sm">Enter your order number and phone number to view your diagnostic results.</p>
         </div>
         <div className="bg-white/85 border border-black/8 rounded-2xl p-8 space-y-4">
           <Input
@@ -101,10 +107,11 @@ export default function OrderResults() {
             onChange={e => setOrderNumber(e.target.value.toUpperCase())}
           />
           <Input
-            label="Date of Birth"
-            type="date"
-            value={dob}
-            onChange={e => setDob(e.target.value)}
+            label="Phone Number"
+            type="tel"
+            placeholder="e.g. 08012345678"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
           />
           {error && <p className="text-sm text-red-500">{error}</p>}
           <Button className="w-full" loading={loading} onClick={lookup}>

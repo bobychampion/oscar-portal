@@ -8,7 +8,7 @@ import Button from '../ui/Button'
 
 export default function LookupForm() {
   const [tracking, setTracking] = useState('')
-  const [dob, setDob] = useState('')
+  const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -19,7 +19,7 @@ export default function LookupForm() {
     setLoading(true)
 
     const { data, error: fnError } = await supabase.functions.invoke('results-lookup', {
-      body: { tracking_number: tracking.trim().toUpperCase(), date_of_birth: dob }
+      body: { tracking_number: tracking.trim().toUpperCase(), phone: phone.trim() }
     })
 
     setLoading(false)
@@ -52,10 +52,11 @@ export default function LookupForm() {
         required
       />
       <Input
-        label="Date of Birth"
-        type="date"
-        value={dob}
-        onChange={e => setDob(e.target.value)}
+        label="Phone Number"
+        type="tel"
+        value={phone}
+        onChange={e => setPhone(e.target.value)}
+        placeholder="e.g. 08012345678"
         required
       />
       {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-xl">{error}</p>}

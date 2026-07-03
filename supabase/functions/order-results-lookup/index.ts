@@ -9,10 +9,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { order_number, date_of_birth } = await req.json()
+    const { order_number, phone } = await req.json()
 
-    if (!order_number || !date_of_birth) {
-      return new Response(JSON.stringify({ error: 'order_number and date_of_birth are required' }), {
+    if (!order_number || !phone) {
+      return new Response(JSON.stringify({ error: 'order_number and phone are required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
         patients(full_name, date_of_birth, gender, phone, email),
         order_results(
           result_mode, result_data, file_url, status, updated_at,
+          entered_by, verified_by,
           test_types!test_type_id(name, specimen_type, test_categories!category_id(name, color))
         )
       `)
@@ -36,14 +37,14 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!order) {
-      return new Response(JSON.stringify({ error: 'No matching record found. Check your order number and date of birth.' }), {
+      return new Response(JSON.stringify({ error: 'No matching record found. Check your order number and phone number.' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
     const patient = order.patients as any
-    if (patient?.date_of_birth !== date_of_birth) {
-      return new Response(JSON.stringify({ error: 'No matching record found. Check your order number and date of birth.' }), {
+    if (patient?.phone !== phone.trim()) {
+      return new Response(JSON.stringify({ error: 'No matching record found. Check your order number and phone number.' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
@@ -61,13 +62,29 @@ Deno.serve(async (req) => {
     // Drafts stay internal — only surface results staff have submitted or verified.
     const visibleResults = (order.order_results as any[]).filter(r => r.status === 'submitted' || r.status === 'verified')
 
+    // Collect unique staff IDs for signature lookup
+    const staffIds = [...new Set([
+      ...visibleResults.map(r => r.entered_by).filter(Boolean),
+      ...visibleResults.map(r => r.verified_by).filter(Boolean),
+    ])]
+
+    let profileMap: Record<string, { full_name: string; signature_url: string | null }> = {}
+    if (staffIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, signature_url')
+        .in('id', staffIds)
+      for (const p of (profiles ?? [])) {
+        profileMap[p.id] = { full_name: p.full_name, signature_url: (p as any).signature_url ?? null }
+      }
+    }
+
     const results = await Promise.all(visibleResults.map(async r => {
       let fileUrl: string | null = null
       if (r.file_url) {
         const { data: signed } = await supabase.storage.from('lab-results').createSignedUrl(r.file_url, 60 * 60)
         fileUrl = signed?.signedUrl ?? null
       }
-      // PostgREST may return the joined row as an object or (in some edge cases) a single-element array
       const tt = Array.isArray(r.test_types) ? r.test_types[0] : r.test_types
       const category = Array.isArray(tt?.test_categories) ? tt?.test_categories[0] : tt?.test_categories
       return {
@@ -83,6 +100,30 @@ Deno.serve(async (req) => {
       }
     }))
 
+    // Pick the first reporter and reviewer for the report footer
+    const firstReporterEntry = visibleResults.find(r => r.entered_by && profileMap[r.entered_by])
+    const firstReviewerEntry = visibleResults.find(r => r.verified_by && profileMap[r.verified_by])
+
+    const reportedBy = firstReporterEntry
+      ? profileMap[firstReporterEntry.entered_by]
+      : null
+
+    let reviewedBySignatureUrl: string | null = null
+    if (firstReviewerEntry && profileMap[firstReviewerEntry.verified_by]?.signature_url) {
+      const { data: signed } = await supabase.storage
+        .from('signatures')
+        .createSignedUrl(profileMap[firstReviewerEntry.verified_by].signature_url!, 60 * 60)
+      reviewedBySignatureUrl = signed?.signedUrl ?? null
+    }
+
+    let reportedBySignatureUrl: string | null = null
+    if (reportedBy?.signature_url) {
+      const { data: signed } = await supabase.storage
+        .from('signatures')
+        .createSignedUrl(reportedBy.signature_url, 60 * 60)
+      reportedBySignatureUrl = signed?.signedUrl ?? null
+    }
+
     return new Response(JSON.stringify({
       status: 'complete',
       order_number: order.order_number,
@@ -91,6 +132,8 @@ Deno.serve(async (req) => {
       gender: patient.gender,
       collected_at: order.created_at,
       results,
+      reported_by: reportedBy ? { name: reportedBy.full_name, signature_url: reportedBySignatureUrl } : null,
+      reviewed_by: firstReviewerEntry ? { name: profileMap[firstReviewerEntry.verified_by]?.full_name ?? null, signature_url: reviewedBySignatureUrl } : null,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

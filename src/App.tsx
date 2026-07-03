@@ -35,6 +35,9 @@ import OrderDetail from './pages/admin/orders/OrderDetail'
 // Test Type Management — admin only
 import TestTypeManagement from './pages/admin/TestTypeManagement'
 
+// Profile — all authenticated staff
+import Profile from './pages/admin/Profile'
+
 // Billing — admin, finance, front_desk
 import InvoiceList from './pages/admin/billing/InvoiceList'
 import InvoiceDetail from './pages/admin/billing/InvoiceDetail'
@@ -61,6 +64,7 @@ export default function App() {
             <Route path="/admin/dashboard" element={<Dashboard />} />
             <Route path="/admin/applications" element={<Applications />} />
             <Route path="/admin/applications/:id" element={<ApplicationDetail />} />
+            <Route path="/admin/profile" element={<Profile />} />
 
             {/* Orders — all roles */}
             <Route path="/admin/orders" element={<OrderList />} />

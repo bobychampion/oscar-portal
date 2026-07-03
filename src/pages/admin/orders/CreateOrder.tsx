@@ -28,7 +28,8 @@ export default function CreateOrder() {
 
   const hasPatient = !!preselected?.patient_id
   const hasTests = (preselected?.preSelectedTestIds?.length ?? 0) > 0
-  const [step, setStep] = useState(hasPatient && hasTests ? 3 : hasPatient ? 2 : 1)
+  // When coming from an application, land on step 2 so staff can see/verify pre-selected tests
+  const [step, setStep] = useState(hasPatient ? 2 : 1)
   const [patientSearch, setPatientSearch] = useState('')
   const [patients, setPatients] = useState<any[]>([])
   const [selectedPatient, setSelectedPatient] = useState<any>(
@@ -197,6 +198,11 @@ export default function CreateOrder() {
           <div className="bg-white/85 border border-black/8 rounded-2xl p-6">
             <h2 className="font-semibold text-gray-900 font-heading mb-1">Select Tests</h2>
             <p className="text-sm text-gray-500 mb-4">{selectedTests.length} selected</p>
+            {hasTests && (
+              <div className="bg-brand/8 border border-brand/20 rounded-xl px-4 py-3 mb-4 text-sm text-brand-2 font-medium">
+                {selectedTests.length} test{selectedTests.length !== 1 ? 's' : ''} pre-selected from this patient's application — review and confirm below.
+              </div>
+            )}
             {Object.entries(byCategory).map(([cat, tests]) => (
               <div key={cat} className="mb-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">{cat}</p>
@@ -220,7 +226,8 @@ export default function CreateOrder() {
               </div>
             ))}
             <div className="flex justify-between mt-6">
-              <Button variant="outline" onClick={() => setStep(1)}>← Back</Button>
+              {!hasPatient && <Button variant="outline" onClick={() => setStep(1)}>← Back</Button>}
+              {hasPatient && <div />}
               <Button disabled={selectedTests.length === 0} onClick={() => setStep(3)}>Next →</Button>
             </div>
           </div>

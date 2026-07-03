@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, Key, Webhook, LogOut,
   Users, UserPlus, ShoppingBag, Receipt,
-  BarChart3, BadgeDollarSign, Plus, FlaskConical
+  BarChart3, BadgeDollarSign, Plus, FlaskConical, UserCircle
 } from 'lucide-react'
 import { signOut } from '../../lib/auth'
 import { useAuth } from '../../contexts/AuthContext'
@@ -39,6 +39,9 @@ const NAV: NavItem[] = [
   { to: '/admin/users',        label: 'Users',         icon: Users,           roles: ['admin'] },
   { to: '/admin/api-keys',     label: 'API Keys',      icon: Key,             roles: ['admin'] },
   { to: '/admin/webhooks',     label: 'Webhooks',      icon: Webhook,         roles: ['admin'] },
+
+  // All roles — personal
+  { to: '/admin/profile',      label: 'My Profile',    icon: UserCircle,      roles: ['admin','finance','front_desk','lab_scientist','doctor'] },
 ]
 
 const ROLE_LABELS: Record<Role, string> = {

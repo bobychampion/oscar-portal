@@ -9,10 +9,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { tracking_number, date_of_birth } = await req.json()
+    const { tracking_number, phone } = await req.json()
 
-    if (!tracking_number || !date_of_birth) {
-      return new Response(JSON.stringify({ error: 'tracking_number and date_of_birth are required' }), {
+    if (!tracking_number || !phone) {
+      return new Response(JSON.stringify({ error: 'tracking_number and phone are required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
@@ -33,11 +33,11 @@ Deno.serve(async (req) => {
         )
       `)
       .eq('tracking_number', tracking_number.trim().toUpperCase())
-      .eq('date_of_birth', date_of_birth)
+      .eq('phone', phone.trim())
       .single()
 
     if (error || !app) {
-      return new Response(JSON.stringify({ error: 'No matching record found. Check your tracking number and date of birth.' }), {
+      return new Response(JSON.stringify({ error: 'No matching record found. Check your tracking number and phone number.' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
